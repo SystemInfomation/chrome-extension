@@ -28,6 +28,18 @@ import { detectSuspiciousLink } from "link-shield";
 const BLOCKED_PAGE_BASE = "https://blocked.palsplan.app";
 
 /**
+ * GitHub releases URL for extension updates.
+ * The extension checks this URL for new versions and notifies users.
+ */
+const GITHUB_RELEASES_URL = "https://api.github.com/repos/SystemInfomation/cdn-hosting/releases/latest";
+const GITHUB_DOWNLOAD_URL = "https://github.com/SystemInfomation/cdn-hosting/releases/latest/download/palsplan-web-protector.zip";
+
+/**
+ * Update check interval in minutes (once per day).
+ */
+const UPDATE_CHECK_INTERVAL_MINUTES = 24 * 60; // 24 hours
+
+/**
  * Minimum link-shield risk score that triggers a block.
  * 0–100; 70 = high risk and above (increased to reduce false positives).
  */
@@ -420,3 +432,187 @@ chrome.webNavigation.onBeforeNavigate.addListener(
   },
   { url: [{ schemes: ["http", "https"] }] }
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Auto-Update System
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Checks GitHub releases for a new version of the extension.
+ * Compares the current version with the latest release version.
+ * 
+ * @returns {Promise<{hasUpdate: boolean, latestVersion: string, downloadUrl: string}>}
+ */
+async function checkForUpdates() {
+  try {
+    const manifest = chrome.runtime.getManifest();
+    const currentVersion = manifest.version;
+    
+    // Fetch the latest release info from GitHub API
+    const response = await fetch(GITHUB_RELEASES_URL, {
+      method: "GET",
+      headers: {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "PalsPlan-Web-Protector"
+      },
+      // Use cache with a reasonable max-age to avoid rate limits
+      cache: "default"
+    });
+    
+    if (!response.ok) {
+      console.warn(`Update check failed: HTTP ${response.status}`);
+      return { hasUpdate: false, latestVersion: currentVersion, downloadUrl: "" };
+    }
+    
+    const releaseData = await response.json();
+    const latestVersion = releaseData.tag_name || releaseData.name || currentVersion;
+    
+    // Remove 'v' prefix if present for comparison
+    const cleanLatest = latestVersion.replace(/^v/, "");
+    const cleanCurrent = currentVersion.replace(/^v/, "");
+    
+    // Simple version comparison (assumes semver format)
+    const hasUpdate = compareVersions(cleanLatest, cleanCurrent) > 0;
+    
+    return {
+      hasUpdate,
+      latestVersion: cleanLatest,
+      downloadUrl: GITHUB_DOWNLOAD_URL,
+      releaseNotes: releaseData.body || "New version available"
+    };
+  } catch (error) {
+    console.error("Error checking for updates:", error);
+    return { hasUpdate: false, latestVersion: "", downloadUrl: "" };
+  }
+}
+
+/**
+ * Compares two semantic version strings.
+ * 
+ * @param {string} v1 - First version (e.g., "1.2.3")
+ * @param {string} v2 - Second version (e.g., "1.2.0")
+ * @returns {number} - Returns 1 if v1 > v2, -1 if v1 < v2, 0 if equal
+ */
+function compareVersions(v1, v2) {
+  const parts1 = v1.split(".").map(Number);
+  const parts2 = v2.split(".").map(Number);
+  
+  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+    const part1 = parts1[i] || 0;
+    const part2 = parts2[i] || 0;
+    
+    if (part1 > part2) return 1;
+    if (part1 < part2) return -1;
+  }
+  
+  return 0;
+}
+
+/**
+ * Notifies the user about available updates.
+ * 
+ * @param {string} version - The new version available
+ * @param {string} downloadUrl - URL to download the update
+ */
+function notifyUpdate(version, downloadUrl) {
+  chrome.notifications.create({
+    type: "basic",
+    iconUrl: "shield-icon-128.png",
+    title: "PalsPlan Web Protector Update Available",
+    message: `Version ${version} is available. Click to download.`,
+    priority: 2,
+    requireInteraction: true,
+    buttons: [
+      { title: "Download Update" }
+    ]
+  }, (notificationId) => {
+    // Store the download URL for later use
+    chrome.storage.local.set({ 
+      [`update_${notificationId}`]: downloadUrl,
+      lastUpdateCheck: Date.now(),
+      latestVersion: version
+    });
+  });
+}
+
+/**
+ * Handles notification button clicks.
+ */
+chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
+  if (buttonIndex === 0) {
+    // User clicked "Download Update"
+    chrome.storage.local.get([`update_${notificationId}`], (result) => {
+      const downloadUrl = result[`update_${notificationId}`];
+      if (downloadUrl) {
+        // Open the download URL in a new tab
+        chrome.tabs.create({ url: downloadUrl });
+        chrome.notifications.clear(notificationId);
+      }
+    });
+  }
+});
+
+/**
+ * Handles notification clicks (clicking the notification body).
+ */
+chrome.notifications.onClicked.addListener((notificationId) => {
+  chrome.storage.local.get([`update_${notificationId}`], (result) => {
+    const downloadUrl = result[`update_${notificationId}`];
+    if (downloadUrl) {
+      chrome.tabs.create({ url: downloadUrl });
+      chrome.notifications.clear(notificationId);
+    }
+  });
+});
+
+/**
+ * Performs the update check and notifies the user if an update is available.
+ */
+async function performUpdateCheck() {
+  const updateInfo = await checkForUpdates();
+  
+  if (updateInfo.hasUpdate) {
+    notifyUpdate(updateInfo.latestVersion, updateInfo.downloadUrl);
+  } else {
+    // Store the last check time
+    chrome.storage.local.set({ lastUpdateCheck: Date.now() });
+  }
+}
+
+/**
+ * Sets up the periodic update check alarm.
+ */
+function setupUpdateAlarm() {
+  // Create an alarm that fires daily
+  chrome.alarms.create("updateCheck", {
+    delayInMinutes: 1, // First check after 1 minute
+    periodInMinutes: UPDATE_CHECK_INTERVAL_MINUTES
+  });
+}
+
+/**
+ * Handles alarm events for periodic update checks.
+ */
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "updateCheck") {
+    performUpdateCheck();
+  }
+});
+
+/**
+ * Initialize the auto-update system on extension installation or update.
+ */
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === "install") {
+    setupUpdateAlarm();
+    // Perform an immediate check after installation
+    performUpdateCheck();
+  } else if (details.reason === "update") {
+    setupUpdateAlarm();
+  }
+});
+
+// On service worker startup, ensure the alarm is set
+chrome.runtime.onStartup.addListener(() => {
+  setupUpdateAlarm();
+});
