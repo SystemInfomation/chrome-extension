@@ -672,8 +672,13 @@ chrome.webNavigation.onBeforeNavigate.addListener(
     // Ignore non-http(s) schemes
     if (!url.startsWith("http://") && !url.startsWith("https://")) return;
 
-    // Don't re-block the blocked page itself
-    if (url.startsWith(BLOCKED_PAGE_BASE)) return;
+    // Don't re-block the blocked page itself - use proper hostname check
+    try {
+      const urlObj = new URL(url);
+      if (urlObj.hostname === new URL(BLOCKED_PAGE_BASE).hostname) return;
+    } catch (_e) {
+      // If URL parsing fails, continue with blocking logic
+    }
 
     // Extract hostname for whitelist check
     let hostname;
@@ -757,10 +762,16 @@ chrome.webNavigation.onBeforeNavigate.addListener(
     const url = details.url;
     const tabId = details.tabId;
     
-    // Check if we're navigating away from blocked page too quickly
-    if (url.startsWith(BLOCKED_PAGE_BASE)) {
-      blockTimestamps.set(tabId, Date.now());
-      return;
+    // Check if we're navigating to the blocked page - use proper hostname check
+    try {
+      const urlObj = new URL(url);
+      const blockedPageHost = new URL(BLOCKED_PAGE_BASE).hostname;
+      if (urlObj.hostname === blockedPageHost) {
+        blockTimestamps.set(tabId, Date.now());
+        return;
+      }
+    } catch (_e) {
+      // If URL parsing fails, continue
     }
     
     // If user navigates away from blocked page within cooldown period

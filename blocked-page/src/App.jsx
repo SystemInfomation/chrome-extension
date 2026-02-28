@@ -4,53 +4,34 @@ import "./App.css";
 import BlockedInfo from "./components/BlockedInfo.jsx";
 
 /**
- * Regular expression pattern to match and remove script tags and their content.
- * Matches: <script...>...</script> including attributes and nested content.
- */
-const SCRIPT_TAG_PATTERN = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi;
-
-/**
- * Cached textarea element for efficient HTML entity decoding.
- * Created once and reused across sanitization calls.
- */
-let cachedTextarea = null;
-
-/**
- * Gets or creates the cached textarea element for HTML entity decoding.
- * 
- * @returns {HTMLTextAreaElement} The textarea element
- */
-function getTextarea() {
-  if (!cachedTextarea) {
-    cachedTextarea = document.createElement("textarea");
-  }
-  return cachedTextarea;
-}
-
-/**
  * Sanitizes a string to prevent XSS attacks.
- * Removes any HTML tags and dangerous characters.
+ * Uses multiple layers of defense:
+ * 1. Strips all HTML content using DOM parsing
+ * 2. Removes dangerous characters
+ * 3. Enforces length limits
  * 
  * @param {string} input - The input string to sanitize
- * @returns {string} - The sanitized string
+ * @returns {string} - The sanitized string (plain text only)
  */
 function sanitizeInput(input) {
   if (!input || typeof input !== "string") return "";
   
-  // Remove script tags and their content using the named pattern
-  let sanitized = input.replace(SCRIPT_TAG_PATTERN, "");
-  sanitized = sanitized.replace(/<[^>]+>/g, "");
+  // First, limit length to prevent DoS
+  let sanitized = input.slice(0, 2048);
   
-  // Decode HTML entities to prevent double encoding attacks using cached textarea
-  const textarea = getTextarea();
-  textarea.innerHTML = sanitized;
-  sanitized = textarea.value;
+  // Use DOM parser to safely extract text content (strips all HTML)
+  // This is more robust than regex-based approaches
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(sanitized, "text/html");
   
-  // Remove any remaining dangerous characters
+  // Extract only text content, which automatically strips all tags
+  sanitized = doc.body.textContent || "";
+  
+  // Additional safety: remove any remaining dangerous characters
+  // (should already be clean, but defense in depth)
   sanitized = sanitized.replace(/[<>'"]/g, "");
   
-  // Limit length to prevent DoS
-  return sanitized.slice(0, 2048);
+  return sanitized;
 }
 
 /**
