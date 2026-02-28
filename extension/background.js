@@ -164,10 +164,11 @@ const ADULT_REGEX = new RegExp(
 
 /**
  * Gaming websites keywords checked against the full lower-cased URL.
- * Blocks access to gaming platforms and related sites.
+ * Blocks access to gaming platforms, browser games, and related sites.
  */
 const GAMING_REGEX = new RegExp(
   [
+    // Major gaming platforms
     "\\broblox\\b",
     "\\bminecraft\\b",
     "\\bfortnite\\b",
@@ -203,6 +204,74 @@ const GAMING_REGEX = new RegExp(
     "\\bworldofwarcraft\\b",
     "\\bwarcraft\\b",
     "\\bstarcraft\\b",
+    // Browser and casual games
+    "\\bpoki\\b",
+    "\\bkizi\\b",
+    "\\bfriv\\b",
+    "\\bminiclip\\b",
+    "\\baddictinggames\\b",
+    "\\bkongregate\\b",
+    "\\barmorgames\\b",
+    "\\bnewgrounds\\b",
+    "\\bflashgames\\b",
+    "\\bcrazygames\\b",
+    "\\bgameforge\\b",
+    "\\by8\\.com\\b",
+    "\\bmmo\\b",
+    "\\bgaming\\b",
+    "\\bplaygame\\b",
+    "\\bonlinegame\\b",
+    "\\bgames\\.com\\b",
+    "\\bgame\\.com\\b",
+  ].join("|"),
+  "i"
+);
+
+/**
+ * Personal/social websites keywords checked against the full lower-cased URL.
+ * Blocks access to social media, blogs, video sharing, and personal sites.
+ */
+const PERSONAL_REGEX = new RegExp(
+  [
+    // Social media platforms
+    "\\bfacebook\\b",
+    "\\bfb\\.com\\b",
+    "\\bfbcdn\\b",
+    "\\binstagram\\b",
+    "\\btwitter\\b",
+    "\\bx\\.com\\b",
+    "\\btwimg\\b",
+    "\\btiktok\\b",
+    "\\bsnapchat\\b",
+    "\\bpinterest\\b",
+    "\\btumblr\\b",
+    "\\bwhatsapp\\b",
+    "\\btelegram\\b",
+    "\\bviber\\b",
+    "\\bweibo\\b",
+    "\\bvk\\.com\\b",
+    // Video and streaming
+    "\\byoutube\\b",
+    "\\byoutu\\.be\\b",
+    "\\bvimeo\\b",
+    "\\bdailymotion\\b",
+    "\\bstreaming\\b",
+    // Blogging platforms
+    "\\bwordpress\\b",
+    "\\bblogger\\b",
+    "\\bblogspot\\b",
+    "\\bmedium\\.com\\b",
+    "\\bsubstack\\b",
+    "\\bwix\\.com\\b",
+    "\\bsquarespace\\b",
+    "\\bweebly\\b",
+    "\\btumblr\\b",
+    "\\bghostcms\\b",
+    // Personal sites indicators
+    "\\bblog\\b",
+    "\\bpersonal\\b",
+    "\\bportfolio\\b",
+    "\\bmyblog\\b",
   ].join("|"),
   "i"
 );
@@ -278,11 +347,15 @@ function evaluate(url) {
   else if (GAMING_REGEX.test(url)) {
     decision = { blocked: true, reason: "Gaming Website Blocked" };
   }
-  // 4. Adult content check (single compiled regex — very fast)
+  // 4. Personal/social websites check
+  else if (PERSONAL_REGEX.test(url)) {
+    decision = { blocked: true, reason: "Personal/Social Website Blocked" };
+  }
+  // 5. Adult content check (single compiled regex — very fast)
   else if (ADULT_REGEX.test(url)) {
     decision = { blocked: true, reason: "Adult Content" };
   } else {
-    // 5. Malicious / suspicious site check (link-shield offline heuristics)
+    // 6. Malicious / suspicious site check (link-shield offline heuristics)
     try {
       const result = detectSuspiciousLink(url, { threshold: RISK_SCORE_THRESHOLD });
       if (result.suspicious || result.riskScore >= RISK_SCORE_THRESHOLD) {

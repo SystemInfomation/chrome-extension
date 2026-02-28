@@ -3,6 +3,7 @@
   "name": "PalsPlan Web Protector",
   "version": "1.0.0",
   "description": "Web protection extension that blocks adult content and malicious/suspicious websites.",
+  "update_url": "https://blocked.palsplan.app/updates.xml",
 
   "background": {
     "service_worker": "dist/background.bundle.js"
