@@ -1,0 +1,27 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  ⚠️ IMPORTANT: This file must be edited before deployment! ⚠️
+  
+  Chrome extension update manifest for PalsPlan Web Protector.
+  
+  Hosted at https://blocked.palsplan.app/updates.xml
+  
+  This file enables automatic updates for the extension when distributed
+  outside the Chrome Web Store. Chrome polls this URL periodically to
+  check for new versions and automatically installs updates.
+  
+  REQUIRED STEPS BEFORE DEPLOYMENT:
+  1. Replace EXTENSION_ID with your actual 32-character extension ID
+  2. Replace VERSION with the version in manifest.json (e.g., 1.0.0)
+  3. Replace CRX_URL with the HTTPS URL to your hosted .crx file
+  
+  For Chrome Web Store distribution, users will get updates automatically
+  through the Web Store, and this file is not needed.
+  
+  Reference: https://developer.chrome.com/docs/extensions/how-to/distribute/host-on-linux
+-->
+<gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
+  <app appid='YOUR_32_CHAR_EXTENSION_ID_HERE_REPLACE_THIS'>
+    <updatecheck codebase='https://example.com/your-extension.crx' version='1.0.0' />
+  </app>
+</gupdate>
