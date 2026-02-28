@@ -4,6 +4,59 @@ import "./App.css";
 import BlockedInfo from "./components/BlockedInfo.jsx";
 
 /**
+ * Sanitizes a string to prevent XSS attacks.
+ * Uses multiple layers of defense:
+ * 1. Strips all HTML content using DOM parsing
+ * 2. Removes dangerous characters
+ * 3. Enforces length limits
+ * 
+ * @param {string} input - The input string to sanitize
+ * @returns {string} - The sanitized string (plain text only)
+ */
+function sanitizeInput(input) {
+  if (!input || typeof input !== "string") return "";
+  
+  // First, limit length to prevent DoS
+  let sanitized = input.slice(0, 2048);
+  
+  // Use DOM parser to safely extract text content (strips all HTML)
+  // This is more robust than regex-based approaches
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(sanitized, "text/html");
+  
+  // Extract only text content, which automatically strips all tags
+  sanitized = doc.body.textContent || "";
+  
+  // Additional safety: remove any remaining dangerous characters
+  // (should already be clean, but defense in depth)
+  sanitized = sanitized.replace(/[<>'"]/g, "");
+  
+  return sanitized;
+}
+
+/**
+ * Validates and sanitizes a URL.
+ * 
+ * @param {string} url - The URL to validate
+ * @returns {string} - The sanitized URL or empty string if invalid
+ */
+function sanitizeUrl(url) {
+  if (!url) return "";
+  
+  try {
+    const parsed = new URL(url);
+    // Only allow http and https protocols
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return "";
+    }
+    return parsed.toString();
+  } catch {
+    // If URL parsing fails, return sanitized text
+    return sanitizeInput(url);
+  }
+}
+
+/**
  * App — root component for the PalsPlan Web Protector blocked page.
  *
  * Reads two query-string parameters injected by the Chrome extension:
@@ -25,8 +78,12 @@ export default function App() {
     const rawUrl = params.get("blockedUrl") || "";
     const rawReason = params.get("reason") || "";
 
-    setBlockedUrl(rawUrl ? decodeURIComponent(rawUrl) : "");
-    setReason(rawReason ? decodeURIComponent(rawReason) : "Policy violation detected");
+    // Sanitize inputs to prevent XSS
+    const sanitizedUrl = sanitizeUrl(rawUrl ? decodeURIComponent(rawUrl) : "");
+    const sanitizedReason = sanitizeInput(rawReason ? decodeURIComponent(rawReason) : "Policy violation detected");
+    
+    setBlockedUrl(sanitizedUrl);
+    setReason(sanitizedReason || "Policy violation detected");
     setTimestamp(new Date().toISOString());
   }, []);
 

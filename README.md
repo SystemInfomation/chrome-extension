@@ -45,7 +45,52 @@ palsplan-web-protector/
 | Malware detection | [link-shield](https://github.com/HamzaMohammed89/link-shield) — fully offline heuristics | No external API calls |
 | Result caching | In-memory `Map` (LRU-style, max 500 entries) | Zero-latency repeat navigations |
 | Blocked page | React + Vite SPA at `https://blocked.palsplan.app` | Parses `?blockedUrl=` and `?reason=` |
-| Distribution | Chrome Web Store or self-hosted | Works as a normal extension, can be disabled by users |
+| Auto-updates | GitHub Releases API + chrome.alarms | Checks daily for new versions |
+| Bypass prevention | Multiple security layers | Back button protection, history tracking, incognito support |
+| Distribution | Chrome Web Store or self-hosted | Works as a normal extension |
+
+---
+
+## Security Features
+
+### Bypass Prevention
+
+The extension includes multiple layers of protection to prevent users from bypassing the web filtering:
+
+1. **Back Button Protection** — Tracks recently blocked URLs per tab and re-blocks attempts to navigate back to them
+2. **History Manipulation Detection** — Monitors navigation patterns to detect bypass attempts
+3. **Rapid Navigation Prevention** — Enforces a cooldown period (2 seconds) after blocking to prevent quick bypass attempts
+4. **Incognito Mode Support** — Extension runs in "spanning" mode, protecting both normal and incognito sessions
+5. **Extension State Monitoring** — Detects when extension is disabled and alerts the user
+6. **Integrity Checks** — Hourly verification that all security components are functioning properly
+7. **Tab Cleanup** — Automatically cleans up tracking data when tabs are closed to prevent memory leaks
+
+### Blocked Page Security
+
+The blocked page at `https://blocked.palsplan.app` includes enterprise-grade security:
+
+1. **Content Security Policy (CSP)** — Strict CSP headers prevent XSS attacks and unauthorized script execution
+2. **Input Sanitization** — All URL parameters are sanitized to prevent XSS and injection attacks
+3. **Security Headers** — Comprehensive HTTP security headers including:
+   - `X-Frame-Options: DENY` — Prevents clickjacking
+   - `X-Content-Type-Options: nosniff` — Prevents MIME sniffing
+   - `Referrer-Policy: no-referrer` — Blocks referrer leakage
+   - `Strict-Transport-Security` — Enforces HTTPS
+   - `Permissions-Policy` — Disables unnecessary browser features
+4. **URL Validation** — Only HTTP/HTTPS URLs are accepted, preventing javascript: and data: URL attacks
+5. **Length Limits** — Input is truncated to 2048 characters to prevent DoS attacks
+6. **No External Resources** — All assets are self-hosted to prevent supply chain attacks
+
+### Auto-Update System
+
+The extension automatically checks for updates to ensure users have the latest security patches:
+
+1. **Daily Update Checks** — Uses `chrome.alarms` API to check GitHub Releases every 24 hours
+2. **Semantic Version Comparison** — Properly compares version numbers (e.g., 1.2.3 vs 1.2.0)
+3. **User Notifications** — Displays a Chrome notification when a new version is available
+4. **One-Click Updates** — Clicking the notification opens the download page
+5. **Secure Downloads** — Only downloads from official GitHub releases via HTTPS
+6. **Background Processing** — All update checks happen in the background without interrupting browsing
 
 ---
 
@@ -210,10 +255,46 @@ After installing the extension:
 
 ## Security Notes
 
-- **No external API calls:** all detection is offline — link-shield runs purely in the service worker bundle
-- **No user data collected:** the extension does not log, store, or transmit browsing history
-- **Blocked page:** uses `decodeURIComponent` on query params; the page only reads and displays these values, it does not execute them
-- **Comprehensive whitelist:** legitimate services (Google, Microsoft, Apple, Amazon, GitHub, etc.) are whitelisted to prevent false positives
-- **Adjusted risk threshold:** link-shield risk score threshold increased to 70/100 (high risk) to reduce false positives while maintaining security
-- **Enhanced CSP:** Content Security Policy includes base-uri, form-action, and frame-ancestors directives for maximum security
-- **Required permissions:** Extension requests all necessary permissions (webNavigation, tabs, storage, alarms, notifications) for proper security operation
+### Privacy & Data Protection
+- **No external API calls:** All detection is offline — link-shield runs purely in the service worker bundle
+- **No user data collected:** The extension does not log, store, or transmit browsing history
+- **No telemetry:** No analytics, tracking, or user behavior monitoring
+
+### Content Filtering
+- **Comprehensive whitelist:** Legitimate services (Google, Microsoft, Apple, Amazon, GitHub, etc.) are whitelisted to prevent false positives
+- **Adjusted risk threshold:** Link-shield risk score threshold increased to 70/100 (high risk) to reduce false positives while maintaining security
+- **Cached results:** URLs are cached in-memory (max 500 entries) for performance, automatically cleaned up
+
+### Blocked Page Security
+- **Input sanitization:** All URL parameters are sanitized to prevent XSS attacks — HTML tags and dangerous characters are removed
+- **URL validation:** Only HTTP/HTTPS protocols are accepted; javascript:, data:, and other dangerous protocols are rejected
+- **Length limits:** Input is truncated to 2048 characters to prevent DoS attacks
+- **Enhanced CSP:** Strict Content Security Policy prevents unauthorized script execution, clickjacking, and XSS
+- **Security headers:** Comprehensive HTTP headers including HSTS, X-Frame-Options, X-Content-Type-Options, and more
+
+### Extension Security
+- **Manifest V3:** Uses the latest Chrome extension manifest version with improved security
+- **Content Security Policy:** Strict CSP for extension pages prevents inline scripts and unauthorized code execution
+- **Required permissions:** Extension only requests necessary permissions:
+  - `webNavigation` — Intercept navigation events to block harmful URLs
+  - `tabs` — Redirect blocked pages and manage tab state
+  - `storage` — Store update check timestamps and user preferences
+  - `alarms` — Schedule periodic update checks and integrity monitoring
+  - `notifications` — Alert users about available updates
+  - `declarativeNetRequest` — Fast, efficient URL blocking
+  - `management` — Monitor extension state to detect tampering
+
+### Bypass Prevention
+- **Incognito mode protection:** Extension runs in both normal and incognito sessions (spanning mode)
+- **Back button protection:** Tracks blocked URLs per tab and re-blocks navigation attempts
+- **History manipulation detection:** Monitors navigation patterns to detect bypass attempts
+- **Rapid navigation prevention:** Enforces cooldown periods after blocking
+- **Extension state monitoring:** Detects and alerts when extension is disabled
+- **Integrity checks:** Hourly verification of security components
+- **Memory management:** Automatic cleanup of tracking data when tabs close
+
+### Update Security
+- **HTTPS-only downloads:** Updates are only downloaded from official GitHub releases via HTTPS
+- **Version verification:** Semantic version comparison ensures legitimate updates
+- **User control:** Updates require user confirmation — no automatic installation
+- **Daily checks:** Background update checks every 24 hours without interrupting browsing

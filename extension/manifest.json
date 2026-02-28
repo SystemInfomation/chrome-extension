@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "description": "Web protection extension that blocks adult content and malicious/suspicious websites.",
   "update_url": "https://blocked.palsplan.app/updates.xml",
+  "incognito": "spanning",
 
   "background": {
     "service_worker": "dist/background.bundle.js"
@@ -14,7 +15,9 @@
     "tabs",
     "storage",
     "alarms",
-    "notifications"
+    "notifications",
+    "declarativeNetRequest",
+    "management"
   ],
 
   "host_permissions": [

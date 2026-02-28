@@ -28,6 +28,18 @@ import { detectSuspiciousLink } from "link-shield";
 const BLOCKED_PAGE_BASE = "https://blocked.palsplan.app";
 
 /**
+ * GitHub releases URL for extension updates.
+ * The extension checks this URL for new versions and notifies users.
+ */
+const GITHUB_RELEASES_URL = "https://api.github.com/repos/SystemInfomation/cdn-hosting/releases/latest";
+const GITHUB_DOWNLOAD_URL = "https://github.com/SystemInfomation/cdn-hosting/releases/latest/download/palsplan-web-protector.zip";
+
+/**
+ * Update check interval in minutes (once per day).
+ */
+const UPDATE_CHECK_INTERVAL_MINUTES = 24 * 60; // 24 hours
+
+/**
  * Minimum link-shield risk score that triggers a block.
  * 0–100; 70 = high risk and above (increased to reduce false positives).
  */
@@ -420,3 +432,395 @@ chrome.webNavigation.onBeforeNavigate.addListener(
   },
   { url: [{ schemes: ["http", "https"] }] }
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Auto-Update System
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Checks GitHub releases for a new version of the extension.
+ * Compares the current version with the latest release version.
+ * 
+ * @returns {Promise<{hasUpdate: boolean, latestVersion: string, downloadUrl: string}>}
+ */
+async function checkForUpdates() {
+  try {
+    const manifest = chrome.runtime.getManifest();
+    const currentVersion = manifest.version;
+    
+    // Fetch the latest release info from GitHub API
+    const response = await fetch(GITHUB_RELEASES_URL, {
+      method: "GET",
+      headers: {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "PalsPlan-Web-Protector"
+      },
+      // Use cache with a reasonable max-age to avoid rate limits
+      cache: "default"
+    });
+    
+    if (!response.ok) {
+      console.warn(`Update check failed: HTTP ${response.status}`);
+      return { hasUpdate: false, latestVersion: currentVersion, downloadUrl: "" };
+    }
+    
+    const releaseData = await response.json();
+    const latestVersion = releaseData.tag_name || releaseData.name || currentVersion;
+    
+    // Remove 'v' prefix if present for comparison
+    const cleanLatest = latestVersion.replace(/^v/, "");
+    const cleanCurrent = currentVersion.replace(/^v/, "");
+    
+    // Simple version comparison (assumes semver format)
+    const hasUpdate = compareVersions(cleanLatest, cleanCurrent) > 0;
+    
+    return {
+      hasUpdate,
+      latestVersion: cleanLatest,
+      downloadUrl: GITHUB_DOWNLOAD_URL,
+      releaseNotes: releaseData.body || "New version available"
+    };
+  } catch (error) {
+    console.error("Error checking for updates:", error);
+    return { hasUpdate: false, latestVersion: "", downloadUrl: "" };
+  }
+}
+
+/**
+ * Compares two semantic version strings.
+ * 
+ * @param {string} v1 - First version (e.g., "1.2.3")
+ * @param {string} v2 - Second version (e.g., "1.2.0")
+ * @returns {number} - Returns 1 if v1 > v2, -1 if v1 < v2, 0 if equal
+ */
+function compareVersions(v1, v2) {
+  const parts1 = v1.split(".").map(Number);
+  const parts2 = v2.split(".").map(Number);
+  
+  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+    const part1 = parts1[i] || 0;
+    const part2 = parts2[i] || 0;
+    
+    if (part1 > part2) return 1;
+    if (part1 < part2) return -1;
+  }
+  
+  return 0;
+}
+
+/**
+ * Notifies the user about available updates.
+ * 
+ * @param {string} version - The new version available
+ * @param {string} downloadUrl - URL to download the update
+ */
+function notifyUpdate(version, downloadUrl) {
+  chrome.notifications.create({
+    type: "basic",
+    iconUrl: "shield-icon-128.png",
+    title: "PalsPlan Web Protector Update Available",
+    message: `Version ${version} is available. Click to download.`,
+    priority: 2,
+    requireInteraction: true,
+    buttons: [
+      { title: "Download Update" }
+    ]
+  }, (notificationId) => {
+    // Store the download URL for later use
+    chrome.storage.local.set({ 
+      [`update_${notificationId}`]: downloadUrl,
+      lastUpdateCheck: Date.now(),
+      latestVersion: version
+    });
+  });
+}
+
+/**
+ * Handles notification button clicks.
+ */
+chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
+  if (buttonIndex === 0) {
+    // User clicked "Download Update"
+    chrome.storage.local.get([`update_${notificationId}`], (result) => {
+      const downloadUrl = result[`update_${notificationId}`];
+      if (downloadUrl) {
+        // Open the download URL in a new tab
+        chrome.tabs.create({ url: downloadUrl });
+        chrome.notifications.clear(notificationId);
+      }
+    });
+  }
+});
+
+/**
+ * Handles notification clicks (clicking the notification body).
+ */
+chrome.notifications.onClicked.addListener((notificationId) => {
+  chrome.storage.local.get([`update_${notificationId}`], (result) => {
+    const downloadUrl = result[`update_${notificationId}`];
+    if (downloadUrl) {
+      chrome.tabs.create({ url: downloadUrl });
+      chrome.notifications.clear(notificationId);
+    }
+  });
+});
+
+/**
+ * Performs the update check and notifies the user if an update is available.
+ */
+async function performUpdateCheck() {
+  const updateInfo = await checkForUpdates();
+  
+  if (updateInfo.hasUpdate) {
+    notifyUpdate(updateInfo.latestVersion, updateInfo.downloadUrl);
+  } else {
+    // Store the last check time
+    chrome.storage.local.set({ lastUpdateCheck: Date.now() });
+  }
+}
+
+/**
+ * Sets up the periodic update check alarm.
+ */
+function setupUpdateAlarm() {
+  // Create an alarm that fires daily
+  chrome.alarms.create("updateCheck", {
+    delayInMinutes: 1, // First check after 1 minute
+    periodInMinutes: UPDATE_CHECK_INTERVAL_MINUTES
+  });
+}
+
+/**
+ * Handles alarm events for periodic update checks.
+ */
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "updateCheck") {
+    performUpdateCheck();
+  }
+});
+
+/**
+ * Initialize the auto-update system on extension installation or update.
+ */
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === "install") {
+    setupUpdateAlarm();
+    // Perform an immediate check after installation
+    performUpdateCheck();
+  } else if (details.reason === "update") {
+    setupUpdateAlarm();
+  }
+});
+
+// On service worker startup, ensure the alarm is set
+chrome.runtime.onStartup.addListener(() => {
+  setupUpdateAlarm();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bypass Prevention & Security Monitoring
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Tracks recently blocked URLs to prevent back button bypass attempts.
+ * Maps tabId → Set of blocked URLs.
+ */
+const recentlyBlockedUrls = new Map();
+
+/**
+ * Maximum number of blocked URLs to track per tab.
+ */
+const MAX_BLOCKED_URLS_PER_TAB = 50;
+
+/**
+ * Enhanced blocking that prevents back button bypasses.
+ * Tracks blocked URLs per tab and re-blocks if user tries to navigate back.
+ */
+chrome.webNavigation.onCommitted.addListener((details) => {
+  // Only handle main frame navigation
+  if (details.frameId !== 0) return;
+  
+  const tabId = details.tabId;
+  const url = details.url;
+  
+  // Check if this URL was recently blocked for this tab
+  const blockedSet = recentlyBlockedUrls.get(tabId);
+  if (blockedSet && blockedSet.has(url)) {
+    // User is trying to navigate back to a blocked URL
+    // Re-evaluate and block again
+    const decision = evaluate(url);
+    if (decision.blocked) {
+      chrome.tabs.update(tabId, {
+        url: buildBlockedUrl(url, decision.reason),
+      });
+    }
+  }
+});
+
+/**
+ * Track blocked URLs when we redirect to the blocked page.
+ * This listener enhances the existing blocking logic to prevent back button bypasses.
+ */
+chrome.webNavigation.onBeforeNavigate.addListener(
+  function (details) {
+    // Only intercept main frame navigations
+    if (details.frameId !== 0) return;
+
+    const url = details.url;
+    const tabId = details.tabId;
+
+    // Ignore non-http(s) schemes
+    if (!url.startsWith("http://") && !url.startsWith("https://")) return;
+
+    // Don't re-block the blocked page itself - use proper hostname check
+    try {
+      const urlObj = new URL(url);
+      if (urlObj.hostname === new URL(BLOCKED_PAGE_BASE).hostname) return;
+    } catch (_e) {
+      // If URL parsing fails, continue with blocking logic
+    }
+
+    // Extract hostname for whitelist check
+    let hostname;
+    try {
+      hostname = new URL(url).hostname.toLowerCase();
+    } catch (_e) {
+      return;
+    }
+
+    // Allow whitelisted domains
+    if (isWhitelisted(hostname)) return;
+
+    // Run detection
+    const decision = evaluate(url);
+    if (decision.blocked) {
+      // Track this blocked URL for this tab
+      if (!recentlyBlockedUrls.has(tabId)) {
+        recentlyBlockedUrls.set(tabId, new Set());
+      }
+      const blockedSet = recentlyBlockedUrls.get(tabId);
+      blockedSet.add(url);
+      
+      // Limit the size of tracked URLs
+      if (blockedSet.size > MAX_BLOCKED_URLS_PER_TAB) {
+        const firstUrl = blockedSet.values().next().value;
+        blockedSet.delete(firstUrl);
+      }
+    }
+  },
+  { url: [{ schemes: ["http", "https"] }] }
+);
+
+/**
+ * Clean up tracking data when tab is closed.
+ */
+chrome.tabs.onRemoved.addListener((tabId) => {
+  recentlyBlockedUrls.delete(tabId);
+});
+
+/**
+ * Monitor for extension being disabled and warn the user.
+ * This helps detect if someone tries to disable the extension.
+ */
+chrome.management.onEnabled.addListener((info) => {
+  if (info.id === chrome.runtime.id) {
+    // Extension was re-enabled - set up monitoring again
+    setupUpdateAlarm();
+  }
+});
+
+chrome.management.onDisabled.addListener((info) => {
+  if (info.id === chrome.runtime.id) {
+    // Extension is being disabled - attempt to warn
+    // Note: Service worker will be terminated, so this may not always work
+    chrome.notifications.create({
+      type: "basic",
+      iconUrl: "shield-icon-128.png",
+      title: "PalsPlan Web Protector Disabled",
+      message: "Warning: Web protection has been disabled. Your browsing is no longer protected.",
+      priority: 2,
+      requireInteraction: true
+    });
+  }
+});
+
+/**
+ * Detect and prevent attempts to navigate away from the blocked page too quickly.
+ * This prevents users from quickly hitting back/forward to bypass the block.
+ */
+const blockTimestamps = new Map();
+/**
+ * Minimum time (in milliseconds) that must pass between blocking events.
+ * Prevents users from rapidly navigating away from blocked pages to bypass protection.
+ */
+const RAPID_NAVIGATION_COOLDOWN_MS = 2000; // 2 seconds
+
+chrome.webNavigation.onBeforeNavigate.addListener(
+  function (details) {
+    if (details.frameId !== 0) return;
+    
+    const url = details.url;
+    const tabId = details.tabId;
+    
+    // Check if we're navigating to the blocked page - use proper hostname check
+    try {
+      const urlObj = new URL(url);
+      const blockedPageHost = new URL(BLOCKED_PAGE_BASE).hostname;
+      if (urlObj.hostname === blockedPageHost) {
+        blockTimestamps.set(tabId, Date.now());
+        return;
+      }
+    } catch (_e) {
+      // If URL parsing fails, continue
+    }
+    
+    // If user navigates away from blocked page within cooldown period
+    const lastBlockTime = blockTimestamps.get(tabId);
+    if (lastBlockTime && Date.now() - lastBlockTime < RAPID_NAVIGATION_COOLDOWN_MS) {
+      // Re-evaluate the URL they're trying to visit
+      let hostname;
+      try {
+        hostname = new URL(url).hostname.toLowerCase();
+      } catch (_e) {
+        return;
+      }
+      
+      if (!isWhitelisted(hostname)) {
+        const decision = evaluate(url);
+        if (decision.blocked) {
+          // Block again and reset the timestamp
+          chrome.tabs.update(tabId, {
+            url: buildBlockedUrl(url, decision.reason),
+          });
+          blockTimestamps.set(tabId, Date.now());
+        }
+      }
+    }
+  },
+  { url: [{ schemes: ["http", "https"] }] }
+);
+
+/**
+ * Periodic integrity check to ensure the extension is functioning properly.
+ * Runs every hour to verify critical components are active.
+ */
+chrome.alarms.create("integrityCheck", {
+  periodInMinutes: 60
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "integrityCheck") {
+    // Verify extension is enabled
+    chrome.management.getSelf((info) => {
+      if (!info.enabled) {
+        console.warn("Extension is disabled - protection not active");
+      }
+    });
+    
+    // Verify listeners are still active
+    const hasNavigationListeners = chrome.webNavigation.onBeforeNavigate.hasListeners();
+    if (!hasNavigationListeners) {
+      console.error("Critical: Navigation listeners are not active!");
+    }
+  }
+});
