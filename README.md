@@ -136,6 +136,70 @@ npx vercel --prod
 
 ---
 
+## Part 2b — Self-Hosting the Extension (Outside the Chrome Web Store)
+
+> Skip this section if you distribute the extension through the Chrome Web Store.  
+> Use it when the extension is not (or not yet) published to the Web Store, or when
+> you need full control over distribution.
+
+Chrome's enterprise policy accepts two formats for every entry in
+`ExtensionInstallForcelist` / `ExtensionSettings`:
+
+| Format | When to use |
+|---|---|
+| `<ID>` only | Only valid inside the Google Admin Console "Add from Chrome Web Store" flow — Chrome fetches the update URL automatically |
+| `<ID>;<UPDATE_URL>` | **Required** when the extension is hosted outside the Chrome Web Store |
+
+### 1 — Package the extension as a `.crx` file
+
+A self-hosted extension must be distributed as a **signed `.crx`** package (not a
+plain `.zip`).
+
+```bash
+# Build the bundle first
+npm run build
+
+# Use Chrome's built-in packer (headless):
+google-chrome --pack-extension=extension/ --pack-extension-key=palsplan-webprotector.pem
+# Output: extension.crx  (named after the directory)
+#         palsplan-webprotector.pem  (created from the --pack-extension-key value on first run)
+```
+
+> On first run Chrome generates the `.pem` file at the path you specified with
+> `--pack-extension-key`. Back it up — you need the same key for every future update
+> or Chrome will treat it as a different extension.
+
+### 2 — Host the `.crx` and update manifest
+
+Upload two files to a publicly accessible HTTPS server (e.g. your CDN):
+
+| File | Example URL |
+|---|---|
+| `extension.crx` | `https://cdn.palsplan.app/palsplan-web-protector.crx` |
+| `extension/updates.xml` | `https://cdn.palsplan.app/updates.xml` |
+
+Edit `extension/updates.xml` and fill in the three placeholders:
+
+```xml
+<app appid='abcdefghijklmnopqrstuvwxyzabcdef'>
+  <updatecheck codebase='https://cdn.palsplan.app/palsplan-web-protector.crx'
+               version='1.0.0' />
+</app>
+```
+
+> Update the `version` attribute every time you release a new `.crx` so that Chrome
+> detects and applies the update on managed devices.
+
+### 3 — Use the update manifest URL in enterprise policy
+
+Wherever the deployment options below reference an update URL, use:
+```
+https://cdn.palsplan.app/updates.xml
+```
+instead of `https://clients2.google.com/service/update2/crx`.
+
+---
+
 ## Part 3 — Enterprise Force-Install (Users Cannot Disable)
 
 > **Why users cannot turn this off:** When an extension is deployed via `ExtensionInstallForcelist` or `ExtensionSettings` with `"installation_mode": "force_installed"`, Chrome prevents users from disabling, removing, or modifying it. The extension does not appear in the normal extensions management UI in a way that allows removal.
@@ -150,10 +214,22 @@ npx vercel --prod
 2. Navigate to:
    **Devices → Chrome → Apps & extensions → Users & browsers**
 3. Select the **Organizational Unit (OU)** you want to target (or the root for everyone)
-4. Click the **+** (Add) button → **Add from Chrome Web Store**
-5. Enter the **Extension ID** from your Chrome Web Store listing
-6. In the **Installation policy** column, set it to **Force install**
-7. Click **Save**
+4. Choose the appropriate add method:
+
+   **From the Chrome Web Store (extension is published to the Web Store):**
+   - Click the **+** (Add) button → **Add from Chrome Web Store**
+   - Enter the **Extension ID** from your Chrome Web Store listing
+
+   **By extension ID (self-hosted or not yet on the Web Store):**
+   - Click the **+** (Add) button → **Add by extension ID**
+   - Enter the **Extension ID**
+   - In the **Installation URL** field, enter the URL of your hosted `updates.xml` manifest
+     (e.g. `https://cdn.palsplan.app/updates.xml`)
+   > **Note:** If the extension is hosted outside the Chrome Web Store you **must** supply
+   > the installation URL — Chrome uses it to fetch and update the `.crx` package.
+
+5. In the **Installation policy** column, set it to **Force install**
+6. Click **Save**
 
 Chrome devices and managed Chrome browsers in that OU will install the extension automatically within ~15 minutes. Users see no install prompt and cannot remove it.
 
@@ -172,6 +248,9 @@ Chrome devices and managed Chrome browsers in that OU will install the extension
 }
 ```
 
+> **Self-hosted extension:** replace the `update_url` value with the URL of your hosted
+> `updates.xml` manifest (e.g. `"update_url": "https://cdn.palsplan.app/updates.xml"`).
+
 Paste this in:
 **Devices → Chrome → Settings → Users & browsers → Additional Chrome policies (JSON)**
 
@@ -187,10 +266,11 @@ Paste this in:
 4. Navigate to:
    `Computer Configuration → Administrative Templates → Google → Google Chrome → Extensions`
 5. Open **Configure the list of force-installed apps and extensions**
-6. Enable it and add the following entry:
-   ```
-   <EXTENSION_ID>;https://clients2.google.com/service/update2/crx
-   ```
+6. Enable it and add an entry in the format `<EXTENSION_ID>;<UPDATE_URL>`:
+   - **Chrome Web Store:** `<EXTENSION_ID>;https://clients2.google.com/service/update2/crx`
+   - **Self-hosted:** `<EXTENSION_ID>;https://cdn.palsplan.app/updates.xml`
+   > The part after the semicolon is the update URL. For extensions hosted outside the
+   > Chrome Web Store you must supply the URL of your hosted `updates.xml` manifest.
 7. Apply and run `gpupdate /force` on client machines
 
 **To also block users from accessing chrome://extensions:**
@@ -210,10 +290,11 @@ Enable: **Prevent users from accessing the chrome://extensions page**
    **Devices → Windows → Configuration profiles → Create profile**
 2. Platform: **Windows 10 and later**, Profile type: **Settings catalog**
 3. Search for **Chrome** and add:
-   - `ExtensionInstallForcelist` — Value:
-     ```
-     <EXTENSION_ID>;https://clients2.google.com/service/update2/crx
-     ```
+   - `ExtensionInstallForcelist` — Value uses the format `<EXTENSION_ID>;<UPDATE_URL>`:
+     - **Chrome Web Store:** `<EXTENSION_ID>;https://clients2.google.com/service/update2/crx`
+     - **Self-hosted:** `<EXTENSION_ID>;https://cdn.palsplan.app/updates.xml`
+     > For extensions hosted outside the Chrome Web Store, the update URL must point to
+     > your hosted `updates.xml` manifest.
 4. Assign the profile to the device/user group and save
 
 #### macOS (Intune or Jamf)
@@ -258,19 +339,29 @@ Create a `.mobileconfig` or Jamf policy with the following Chrome preference:
 </plist>
 ```
 
-Replace `<EXTENSION_ID>` with your actual extension ID. Upload this profile to Jamf Pro → Computers → Configuration Profiles, or Intune → macOS → Configuration profiles.
+Replace `<EXTENSION_ID>` with your actual extension ID, and the update URL with
+`https://cdn.palsplan.app/updates.xml` if the extension is self-hosted (outside the
+Chrome Web Store). Upload this profile to Jamf Pro → Computers → Configuration Profiles,
+or Intune → macOS → Configuration profiles.
 
 ---
 
 ### Option D — Registry (Windows, without GPO)
 
-For machines not joined to a domain, you can set the policy directly via the registry:
+For machines not joined to a domain, you can set the policy directly via the registry.
+The value format is `<EXTENSION_ID>;<UPDATE_URL>` — use the Chrome Web Store URL for
+Web Store extensions, or your hosted `updates.xml` URL for self-hosted extensions:
 
 ```
 Key:   HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Google\Chrome\ExtensionInstallForcelist
 Name:  1  (increment for each extension)
 Type:  REG_SZ
 Value: <EXTENSION_ID>;https://clients2.google.com/service/update2/crx
+```
+
+For a self-hosted extension substitute the update URL:
+```
+Value: <EXTENSION_ID>;https://cdn.palsplan.app/updates.xml
 ```
 
 Can be deployed via a PowerShell script:
@@ -281,6 +372,8 @@ if (-not (Test-Path $regPath)) {
     New-Item -Path $regPath -Force | Out-Null
 }
 Set-ItemProperty -Path $regPath -Name "1" -Value "<EXTENSION_ID>;https://clients2.google.com/service/update2/crx"
+# For a self-hosted extension:
+# Set-ItemProperty -Path $regPath -Name "1" -Value "<EXTENSION_ID>;https://cdn.palsplan.app/updates.xml"
 ```
 
 ---
