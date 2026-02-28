@@ -21,7 +21,7 @@
   Reference: https://developer.chrome.com/docs/extensions/how-to/distribute/host-on-linux
 -->
 <gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
-  <app appid='YOUR_32_CHAR_EXTENSION_ID_HERE_REPLACE_THIS'>
-    <updatecheck codebase='https://example.com/your-extension.crx' version='1.0.0' />
+  <app appid='mdagnhgcaahpijdbikbockbjjcocabel'>
+    <updatecheck codebase='https://blocked.palsplan.app/your-extension.crx' version='1.0.0' />
   </app>
 </gupdate>
