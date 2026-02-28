@@ -1,6 +1,7 @@
 # PalsPlan Web Protector
 
 [![Build & Package Extension](https://github.com/SystemInfomation/cdn-hosting/actions/workflows/build-extension.yml/badge.svg)](https://github.com/SystemInfomation/cdn-hosting/actions/workflows/build-extension.yml)
+[![Download Extension ZIP](https://img.shields.io/badge/Download-Extension%20ZIP-blue?style=flat&logo=googlechrome)](https://github.com/SystemInfomation/cdn-hosting/releases/latest/download/palsplan-web-protector.zip)
 
 Enterprise Chrome extension + hosted blocked page that protects employees from adult content and malicious/suspicious websites — with **zero user-facing UI** and **zero ability to disable**.
 
