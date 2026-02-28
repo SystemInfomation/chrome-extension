@@ -616,3 +616,196 @@ chrome.runtime.onInstalled.addListener((details) => {
 chrome.runtime.onStartup.addListener(() => {
   setupUpdateAlarm();
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bypass Prevention & Security Monitoring
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Tracks recently blocked URLs to prevent back button bypass attempts.
+ * Maps tabId → Set of blocked URLs.
+ */
+const recentlyBlockedUrls = new Map();
+
+/**
+ * Maximum number of blocked URLs to track per tab.
+ */
+const MAX_BLOCKED_HISTORY = 50;
+
+/**
+ * Enhanced blocking that prevents back button bypasses.
+ * Tracks blocked URLs per tab and re-blocks if user tries to navigate back.
+ */
+chrome.webNavigation.onCommitted.addListener((details) => {
+  // Only handle main frame navigation
+  if (details.frameId !== 0) return;
+  
+  const tabId = details.tabId;
+  const url = details.url;
+  
+  // Check if this URL was recently blocked for this tab
+  const blockedSet = recentlyBlockedUrls.get(tabId);
+  if (blockedSet && blockedSet.has(url)) {
+    // User is trying to navigate back to a blocked URL
+    // Re-evaluate and block again
+    const decision = evaluate(url);
+    if (decision.blocked) {
+      chrome.tabs.update(tabId, {
+        url: buildBlockedUrl(url, decision.reason),
+      });
+    }
+  }
+});
+
+/**
+ * Track blocked URLs when we redirect to the blocked page.
+ * This listener enhances the existing blocking logic to prevent back button bypasses.
+ */
+chrome.webNavigation.onBeforeNavigate.addListener(
+  function (details) {
+    // Only intercept main frame navigations
+    if (details.frameId !== 0) return;
+
+    const url = details.url;
+    const tabId = details.tabId;
+
+    // Ignore non-http(s) schemes
+    if (!url.startsWith("http://") && !url.startsWith("https://")) return;
+
+    // Don't re-block the blocked page itself
+    if (url.startsWith(BLOCKED_PAGE_BASE)) return;
+
+    // Extract hostname for whitelist check
+    let hostname;
+    try {
+      hostname = new URL(url).hostname.toLowerCase();
+    } catch (_e) {
+      return;
+    }
+
+    // Allow whitelisted domains
+    if (isWhitelisted(hostname)) return;
+
+    // Run detection
+    const decision = evaluate(url);
+    if (decision.blocked) {
+      // Track this blocked URL for this tab
+      if (!recentlyBlockedUrls.has(tabId)) {
+        recentlyBlockedUrls.set(tabId, new Set());
+      }
+      const blockedSet = recentlyBlockedUrls.get(tabId);
+      blockedSet.add(url);
+      
+      // Limit the size of tracked URLs
+      if (blockedSet.size > MAX_BLOCKED_HISTORY) {
+        const firstUrl = blockedSet.values().next().value;
+        blockedSet.delete(firstUrl);
+      }
+    }
+  },
+  { url: [{ schemes: ["http", "https"] }] }
+);
+
+/**
+ * Clean up tracking data when tab is closed.
+ */
+chrome.tabs.onRemoved.addListener((tabId) => {
+  recentlyBlockedUrls.delete(tabId);
+});
+
+/**
+ * Monitor for extension being disabled and warn the user.
+ * This helps detect if someone tries to disable the extension.
+ */
+chrome.management.onEnabled.addListener((info) => {
+  if (info.id === chrome.runtime.id) {
+    // Extension was re-enabled - set up monitoring again
+    setupUpdateAlarm();
+  }
+});
+
+chrome.management.onDisabled.addListener((info) => {
+  if (info.id === chrome.runtime.id) {
+    // Extension is being disabled - attempt to warn
+    // Note: Service worker will be terminated, so this may not always work
+    chrome.notifications.create({
+      type: "basic",
+      iconUrl: "shield-icon-128.png",
+      title: "PalsPlan Web Protector Disabled",
+      message: "Warning: Web protection has been disabled. Your browsing is no longer protected.",
+      priority: 2,
+      requireInteraction: true
+    });
+  }
+});
+
+/**
+ * Detect and prevent attempts to navigate away from the blocked page too quickly.
+ * This prevents users from quickly hitting back/forward to bypass the block.
+ */
+const blockTimestamps = new Map();
+const BLOCK_COOLDOWN_MS = 2000; // 2 seconds minimum between blocks
+
+chrome.webNavigation.onBeforeNavigate.addListener(
+  function (details) {
+    if (details.frameId !== 0) return;
+    
+    const url = details.url;
+    const tabId = details.tabId;
+    
+    // Check if we're navigating away from blocked page too quickly
+    if (url.startsWith(BLOCKED_PAGE_BASE)) {
+      blockTimestamps.set(tabId, Date.now());
+      return;
+    }
+    
+    // If user navigates away from blocked page within cooldown period
+    const lastBlockTime = blockTimestamps.get(tabId);
+    if (lastBlockTime && Date.now() - lastBlockTime < BLOCK_COOLDOWN_MS) {
+      // Re-evaluate the URL they're trying to visit
+      let hostname;
+      try {
+        hostname = new URL(url).hostname.toLowerCase();
+      } catch (_e) {
+        return;
+      }
+      
+      if (!isWhitelisted(hostname)) {
+        const decision = evaluate(url);
+        if (decision.blocked) {
+          // Block again and reset the timestamp
+          chrome.tabs.update(tabId, {
+            url: buildBlockedUrl(url, decision.reason),
+          });
+          blockTimestamps.set(tabId, Date.now());
+        }
+      }
+    }
+  },
+  { url: [{ schemes: ["http", "https"] }] }
+);
+
+/**
+ * Periodic integrity check to ensure the extension is functioning properly.
+ * Runs every hour to verify critical components are active.
+ */
+chrome.alarms.create("integrityCheck", {
+  periodInMinutes: 60
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "integrityCheck") {
+    // Verify extension is enabled
+    chrome.management.getSelf((info) => {
+      if (!info.enabled) {
+        console.warn("Extension is disabled - protection not active");
+      }
+    });
+    
+    // Verify listeners are still active
+    const hasNavigationListeners = chrome.webNavigation.onBeforeNavigate.hasListeners();
+    if (!hasNavigationListeners) {
+      console.error("Critical: Navigation listeners are not active!");
+    }
+  }
+});
