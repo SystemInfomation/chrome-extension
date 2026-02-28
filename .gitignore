@@ -1,0 +1,14 @@
+# Extension build output
+extension/dist/
+
+# Node dependencies
+node_modules/
+
+# npm debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS artifacts
+.DS_Store
+Thumbs.db

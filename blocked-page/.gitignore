@@ -1,0 +1,13 @@
+# React blocked-page build output
+dist/
+
+# Node dependencies
+node_modules/
+
+# Local env files
+.env.local
+.env.*.local
+
+# OS artifacts
+.DS_Store
+Thumbs.db
