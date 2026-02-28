@@ -9,8 +9,7 @@
   },
 
   "permissions": [
-    "webRequest",
-    "webRequestBlocking"
+    "webRequest"
   ],
 
   "host_permissions": [
