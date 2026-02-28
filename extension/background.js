@@ -159,6 +159,51 @@ const ADULT_REGEX = new RegExp(
   "i"
 );
 
+/**
+ * Gaming websites keywords checked against the full lower-cased URL.
+ * Blocks access to gaming platforms and related sites.
+ */
+const GAMING_REGEX = new RegExp(
+  [
+    "\\broblox\\b",
+    "\\bminecraft\\b",
+    "\\bfortnite\\b",
+    "\\bsteam\\b",
+    "\\bsteampowered\\b",
+    "\\bsteamcommunity\\b",
+    "\\bepicgames\\b",
+    "\\borigin\\b",
+    "\\bbattle\\.net\\b",
+    "\\bblizzard\\b",
+    "\\btwitch\\b",
+    "\\bdiscord\\b",
+    "\\briotgames\\b",
+    "\\bleagueoflegends\\b",
+    "\\bvalorant\\b",
+    "\\bubisoft\\b",
+    "\\bea\\.com\\b",
+    "\\bxbox\\b",
+    "\\bplaystation\\b",
+    "\\bnintendo\\b",
+    "\\bgog\\.com\\b",
+    "\\bitch\\.io\\b",
+    "\\bgamepass\\b",
+    "\\brockstargames\\b",
+    "\\bactivision\\b",
+    "\\bcallofduty\\b",
+    "\\bpubg\\b",
+    "\\bapexlegends\\b",
+    "\\boverwatch\\b",
+    "\\bcounters?strike\\b",
+    "\\bcsgo\\b",
+    "\\bdota\\b",
+    "\\bworldofwarcraft\\b",
+    "\\bwarcraft\\b",
+    "\\bstarcraft\\b",
+  ].join("|"),
+  "i"
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -204,11 +249,37 @@ function evaluate(url) {
 
   let decision;
 
-  // 1. Adult content check (single compiled regex — very fast)
-  if (ADULT_REGEX.test(url)) {
+  // Extract hostname for localhost check
+  let hostname;
+  try {
+    hostname = new URL(url).hostname.toLowerCase();
+  } catch (_e) {
+    hostname = "";
+  }
+
+  // 1. Block localhost and loopback addresses
+  if (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1" ||
+    hostname.startsWith("127.") ||
+    hostname.endsWith(".localhost")
+  ) {
+    decision = { blocked: true, reason: "Localhost Access Blocked" };
+  }
+  // 2. Block all HTTP (insecure) connections
+  else if (url.startsWith("http://")) {
+    decision = { blocked: true, reason: "Insecure Connection (HTTP)" };
+  }
+  // 3. Gaming websites check
+  else if (GAMING_REGEX.test(url)) {
+    decision = { blocked: true, reason: "Gaming Website Blocked" };
+  }
+  // 4. Adult content check (single compiled regex — very fast)
+  else if (ADULT_REGEX.test(url)) {
     decision = { blocked: true, reason: "Adult Content" };
   } else {
-    // 2. Malicious / suspicious site check (link-shield offline heuristics)
+    // 5. Malicious / suspicious site check (link-shield offline heuristics)
     try {
       const result = detectSuspiciousLink(url, { threshold: RISK_SCORE_THRESHOLD });
       if (result.suspicious || result.riskScore >= RISK_SCORE_THRESHOLD) {
