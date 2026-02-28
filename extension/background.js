@@ -2,8 +2,11 @@
  * PalsPlan Web Protector — background service worker
  *
  * Intercepts main_frame navigation requests and blocks:
- *  1. Adult/explicit content  — detected via keyword/pattern matching on the URL
- *  2. Malicious/suspicious sites — detected via link-shield (offline, heuristic)
+ *  1. HTTP (insecure) connections
+ *  2. Localhost and loopback addresses
+ *  3. Gaming websites (Roblox, Steam, Discord, etc.)
+ *  4. Adult/explicit content — detected via keyword/pattern matching on the URL
+ *  5. Malicious/suspicious sites — detected via link-shield (offline, heuristic)
  *
  * When a URL is blocked the tab is redirected to the hosted blocked page at
  * https://blocked.palsplan.app with the original URL and block reason encoded
@@ -159,6 +162,95 @@ const ADULT_REGEX = new RegExp(
   "i"
 );
 
+/**
+ * Gaming websites keywords checked against the full lower-cased URL.
+ * Blocks access to gaming platforms, browser games, and related sites.
+ */
+const GAMING_REGEX = new RegExp(
+  [
+    // Major gaming platforms
+    "\\broblox\\.com\\b",
+    "\\bminecraft\\.net\\b",
+    "\\bfortnite\\.com\\b",
+    "\\bsteampowered\\.com\\b",
+    "\\bsteamcommunity\\.com\\b",
+    "\\bepicgames\\.com\\b",
+    "\\borigin\\.com\\b",
+    "\\bbattle\\.net\\b",
+    "\\bblizzard\\.com\\b",
+    "\\btwitch\\.tv\\b",
+    "\\bdiscord\\.com\\b",
+    "\\bdiscord\\.gg\\b",
+    "\\briotgames\\.com\\b",
+    "\\bleagueoflegends\\.com\\b",
+    "\\bvalorant\\.com\\b",
+    "\\bubisoft\\.com\\b",
+    "\\bea\\.com\\b",
+    "\\bxbox\\.com\\b",
+    "\\bplaystation\\.com\\b",
+    "\\bnintendo\\.com\\b",
+    "\\bgog\\.com\\b",
+    "\\bitch\\.io\\b",
+    "\\brockstargames\\.com\\b",
+    "\\bactivision\\.com\\b",
+    "\\bcallofduty\\.com\\b",
+    "\\bpubg\\.com\\b",
+    "\\bapexlegends\\.com\\b",
+    // Browser and casual games
+    "\\bpoki\\.com\\b",
+    "\\bkizi\\.com\\b",
+    "\\bfriv\\.com\\b",
+    "\\bminiclip\\.com\\b",
+    "\\baddictinggames\\.com\\b",
+    "\\bkongregate\\.com\\b",
+    "\\barmorgames\\.com\\b",
+    "\\bnewgrounds\\.com\\b",
+    "\\bcrazygames\\.com\\b",
+    "\\bgameforge\\.com\\b",
+    "\\by8\\.com\\b",
+  ].join("|"),
+  "i"
+);
+
+/**
+ * Personal/social websites keywords checked against the full lower-cased URL.
+ * Blocks access to social media, blogs, video sharing, and personal sites.
+ */
+const PERSONAL_REGEX = new RegExp(
+  [
+    // Social media platforms
+    "\\bfacebook\\.com\\b",
+    "\\bfb\\.com\\b",
+    "\\bfbcdn\\b",
+    "\\binstagram\\.com\\b",
+    "\\btwitter\\.com\\b",
+    "\\btwimg\\b",
+    "\\btiktok\\.com\\b",
+    "\\bsnapchat\\.com\\b",
+    "\\bpinterest\\.com\\b",
+    "\\btumblr\\.com\\b",
+    "\\bwhatsapp\\.com\\b",
+    "\\btelegram\\.org\\b",
+    "\\bviber\\.com\\b",
+    "\\bweibo\\.com\\b",
+    "\\bvk\\.com\\b",
+    // Video and streaming
+    "\\byoutube\\.com\\b",
+    "\\byoutu\\.be\\b",
+    "\\bvimeo\\.com\\b",
+    "\\bdailymotion\\.com\\b",
+    // Blogging platforms
+    "\\bblogger\\.com\\b",
+    "\\bblogspot\\.com\\b",
+    "\\bmedium\\.com\\b",
+    "\\bsubstack\\.com\\b",
+    "\\bwix\\.com\\b",
+    "\\bsquarespace\\.com\\b",
+    "\\bweebly\\.com\\b",
+  ].join("|"),
+  "i"
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -204,11 +296,41 @@ function evaluate(url) {
 
   let decision;
 
-  // 1. Adult content check (single compiled regex — very fast)
-  if (ADULT_REGEX.test(url)) {
+  // Extract hostname for localhost check
+  let hostname;
+  try {
+    hostname = new URL(url).hostname.toLowerCase();
+  } catch (_e) {
+    hostname = "";
+  }
+
+  // 1. Block localhost and loopback addresses
+  if (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1" ||
+    hostname.startsWith("127.") ||
+    hostname.endsWith(".localhost")
+  ) {
+    decision = { blocked: true, reason: "Localhost Access Blocked" };
+  }
+  // 2. Block all HTTP (insecure) connections
+  else if (url.startsWith("http://")) {
+    decision = { blocked: true, reason: "Insecure Connection (HTTP)" };
+  }
+  // 3. Gaming websites check
+  else if (GAMING_REGEX.test(url)) {
+    decision = { blocked: true, reason: "Gaming Website Blocked" };
+  }
+  // 4. Personal/social websites check
+  else if (PERSONAL_REGEX.test(url)) {
+    decision = { blocked: true, reason: "Personal/Social Website Blocked" };
+  }
+  // 5. Adult content check (single compiled regex — very fast)
+  else if (ADULT_REGEX.test(url)) {
     decision = { blocked: true, reason: "Adult Content" };
   } else {
-    // 2. Malicious / suspicious site check (link-shield offline heuristics)
+    // 6. Malicious / suspicious site check (link-shield offline heuristics)
     try {
       const result = detectSuspiciousLink(url, { threshold: RISK_SCORE_THRESHOLD });
       if (result.suspicious || result.riskScore >= RISK_SCORE_THRESHOLD) {
