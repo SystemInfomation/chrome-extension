@@ -5,13 +5,17 @@
   "private": true,
   "scripts": {
     "build": "webpack --config webpack.config.js",
-    "build:dev": "webpack --config webpack.config.js --mode development"
+    "build:dev": "webpack --config webpack.config.js --mode development",
+    "lint": "eslint extension/background.js webpack.config.js"
   },
   "dependencies": {
     "link-shield": "^1.0.0",
     "punycode": "^2.3.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.0.2",
+    "globals": "^17.3.0",
     "webpack": "^5.98.0",
     "webpack-cli": "^6.0.1"
   }

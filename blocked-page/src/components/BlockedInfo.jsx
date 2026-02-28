@@ -1,3 +1,4 @@
+import PropTypes from "prop-types";
 import { AlertTriangle } from "lucide-react";
 
 /**
@@ -52,3 +53,9 @@ export default function BlockedInfo({ blockedUrl, reason, timestamp }) {
     </>
   );
 }
+
+BlockedInfo.propTypes = {
+  blockedUrl: PropTypes.string,
+  reason: PropTypes.string,
+  timestamp: PropTypes.string,
+};

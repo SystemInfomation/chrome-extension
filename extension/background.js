@@ -200,7 +200,7 @@ chrome.webRequest.onBeforeRequest.addListener(
     let hostname;
     try {
       hostname = new URL(url).hostname.toLowerCase();
-    } catch (e) {
+    } catch (_e) {
       return {};
     }
 
