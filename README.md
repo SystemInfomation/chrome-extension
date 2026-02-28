@@ -175,7 +175,7 @@ Before deploying, edit `blocked-page/public/updates.xml` and fill in the three p
 
 | Placeholder | Description | Example |
 |---|---|---|
-| `EXTENSION_ID` | The 32-character Chrome extension ID | `abcdefghijklmnopqrstuvwxyz` |
+| `EXTENSION_ID` | The 32-character Chrome extension ID | `abcdefghijklmnopqrstuvwxyzabcdef` |
 | `CRX_URL` | Public HTTPS URL of the signed .crx package | `https://cdn.palsplan.app/palsplan-web-protector.crx` |
 | `VERSION` | Current extension version matching manifest.json | `1.0.0` |
 
