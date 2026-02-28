@@ -1,17 +1,14 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!--
-  Self-hosted extension update manifest for PalsPlan Web Protector.
+  Chrome extension update manifest for PalsPlan Web Protector.
 
-  Host this file at a stable HTTPS URL (e.g. https://cdn.palsplan.app/updates.xml).
-  That URL is what you supply as the update_url in enterprise policy when the
-  extension is distributed outside the Chrome Web Store.
+  Hosted at https://blocked.palsplan.app/updates.xml
 
-  Replace the three placeholders before deploying:
-    EXTENSION_ID  — the 32-character Chrome extension ID (32 lowercase letters a–p,
-                    e.g. abcdefghijklmnopqrstuvwxyzabcdef)
-    VERSION       — current extension version matching manifest.json (e.g. 1.0.0)
-    CRX_URL       — public HTTPS URL of the signed .crx package
-                    (e.g. https://cdn.palsplan.app/palsplan-web-protector.crx)
+  This file enables automatic updates for the extension when distributed
+  outside the Chrome Web Store. Chrome polls this URL periodically to
+  check for new versions and automatically installs updates.
+  
+  The .crx file is hosted at https://blocked.palsplan.app/palsplan-web-protector.crx
 
   Chrome polls this URL according to its update schedule and installs/updates
   the extension automatically on managed devices.

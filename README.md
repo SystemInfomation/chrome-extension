@@ -163,21 +163,16 @@ google-chrome --pack-extension=extension/ --pack-extension-key=palsplan-webprote
 
 ### 2 — Host the `.crx` and update manifest
 
-An `updates.xml` file is automatically created in `blocked-page/public/updates.xml` and will be hosted at `https://blocked.palsplan.app/updates.xml` when you deploy the blocked page.
+The `updates.xml` file is included in `blocked-page/public/updates.xml` and will be automatically hosted at `https://blocked.palsplan.app/updates.xml` when you deploy the blocked page.
 
-Before deploying, edit `blocked-page/public/updates.xml` and fill in the three placeholders:
+The `.crx` file should also be hosted at `https://blocked.palsplan.app/palsplan-web-protector.crx`.
 
-```xml
-<app appid='EXTENSION_ID'>
-  <updatecheck codebase='CRX_URL' version='VERSION' />
-</app>
-```
+The `updates.xml` is already configured with:
+- Extension ID: `mdagnhgcaahpijdbikbockbjjcocabel`
+- CRX URL: `https://blocked.palsplan.app/palsplan-web-protector.crx`
+- Version: `1.0.0`
 
-| Placeholder | Description | Example |
-|---|---|---|
-| `EXTENSION_ID` | The 32-character Chrome extension ID (uses lowercase a-p) | `abcdefghijklmnopqrstuvwxyzabcdef` |
-| `CRX_URL` | Public HTTPS URL of the signed .crx package | `https://cdn.palsplan.app/palsplan-web-protector.crx` |
-| `VERSION` | Current extension version matching manifest.json | `1.0.0` |
+To update the version for a new release, edit both `extension/manifest.json` and `blocked-page/public/updates.xml` to match.
 
 > Update the `version` attribute every time you release a new `.crx` so that Chrome
 > detects and applies the update automatically.
@@ -214,3 +209,7 @@ After installing the extension:
 - **No external API calls:** all detection is offline — link-shield runs purely in the service worker bundle
 - **No user data collected:** the extension does not log, store, or transmit browsing history
 - **Blocked page:** uses `decodeURIComponent` on query params; the page only reads and displays these values, it does not execute them
+- **Comprehensive whitelist:** legitimate services (Google, Microsoft, Apple, Amazon, GitHub, etc.) are whitelisted to prevent false positives
+- **Adjusted risk threshold:** link-shield risk score threshold increased to 70/100 (high risk) to reduce false positives while maintaining security
+- **Enhanced CSP:** Content Security Policy includes base-uri, form-action, and frame-ancestors directives for maximum security
+- **Required permissions:** Extension requests all necessary permissions (webNavigation, tabs, storage, alarms, notifications) for proper security operation
