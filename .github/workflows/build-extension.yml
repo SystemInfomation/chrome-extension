@@ -2,12 +2,14 @@ name: Build & Package Extension
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -26,3 +28,13 @@ jobs:
         with:
           name: palsplan-web-protector
           path: palsplan-web-protector.zip
+
+      - name: Publish extension to GitHub Releases
+        run: |
+          gh release delete latest --yes 2>/dev/null || true
+          gh release create latest palsplan-web-protector.zip \
+            --title "Latest Build" \
+            --notes "Pre-built extension ZIP. Download \`palsplan-web-protector.zip\`, then load it as an unpacked extension in Chrome (\`chrome://extensions\` → Enable Developer mode → Load unpacked → select the unzipped folder)." \
+            --latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
