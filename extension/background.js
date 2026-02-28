@@ -11,13 +11,8 @@
  *
  * No external API calls are made during detection — everything is offline.
  *
- * NOTE: Blocking webRequest listeners in Manifest V3 are only available to
- * extensions that are force-installed via enterprise policy
- * (ExtensionInstallForcelist / ExtensionSettings). The "webRequestBlocking"
- * permission must be declared in the manifest, and Chrome will only honour it
- * for extensions deployed via enterprise policy.
- * This extension is designed exclusively for that deployment model and cannot
- * be disabled by end users.
+ * This extension works as a normal Chrome extension and does not require
+ * enterprise policy or force-installation.
  */
 
 import { detectSuspiciousLink } from "link-shield";
@@ -184,20 +179,24 @@ function buildBlockedUrl(originalUrl, reason) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Intercepts only top-level page navigations (main_frame).
- * Returns a redirect to the blocked page when a URL should be blocked.
+ * Intercepts top-level page navigations using webNavigation API.
+ * When a URL should be blocked, redirects the tab to the blocked page.
  *
- * Blocking webRequest listeners in MV3 are restricted to enterprise-policy
- * force-installed extensions — which is the only deployment model supported
- * by this extension.
+ * This approach works for normal Chrome extensions without requiring
+ * enterprise policy or force-installation.
  */
-chrome.webRequest.onBeforeRequest.addListener(
+chrome.webNavigation.onBeforeNavigate.addListener(
   function (details) {
+    // Only intercept main frame navigations (not iframes)
+    if (details.frameId !== 0) {
+      return;
+    }
+
     const url = details.url;
 
     // Ignore non-http(s) schemes (chrome://, chrome-extension://, etc.)
-    if (url.indexOf("http://") !== 0 && url.indexOf("https://") !== 0) {
-      return {};
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      return;
     }
 
     // Extract hostname for whitelist check
@@ -205,22 +204,22 @@ chrome.webRequest.onBeforeRequest.addListener(
     try {
       hostname = new URL(url).hostname.toLowerCase();
     } catch (_e) {
-      return {};
+      return;
     }
 
     // Allow whitelisted domains unconditionally
     if (isWhitelisted(hostname)) {
-      return {};
+      return;
     }
 
     // Run detection (cached after first evaluation)
     const decision = evaluate(url);
     if (decision.blocked) {
-      return { redirectUrl: buildBlockedUrl(url, decision.reason) };
+      // Redirect the tab to the blocked page
+      chrome.tabs.update(details.tabId, {
+        url: buildBlockedUrl(url, decision.reason),
+      });
     }
-
-    return {};
   },
-  { urls: ["<all_urls>"], types: ["main_frame"] },
-  ["blocking"]
+  { url: [{ schemes: ["http", "https"] }] }
 );
