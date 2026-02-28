@@ -1,5 +1,6 @@
 # Extension build output
 extension/dist/
+*.zip
 
 # Node dependencies
 node_modules/
