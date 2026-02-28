@@ -13,9 +13,9 @@
  *
  * NOTE: Blocking webRequest listeners in Manifest V3 are only available to
  * extensions that are force-installed via enterprise policy
- * (ExtensionInstallForcelist / ExtensionSettings). The blocking capability is
- * granted by the enterprise policy itself — no manifest permission declaration
- * is required (and "webRequestBlocking" is not a valid MV3 permission).
+ * (ExtensionInstallForcelist / ExtensionSettings). The "webRequestBlocking"
+ * permission must be declared in the manifest, and Chrome will only honour it
+ * for extensions deployed via enterprise policy.
  * This extension is designed exclusively for that deployment model and cannot
  * be disabled by end users.
  */
