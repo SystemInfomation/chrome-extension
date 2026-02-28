@@ -6,7 +6,8 @@
   "scripts": {
     "build": "webpack --config webpack.config.js",
     "build:dev": "webpack --config webpack.config.js --mode development",
-    "lint": "eslint extension/background.js webpack.config.js"
+    "lint": "eslint extension/background.js webpack.config.js",
+    "pack": "npm run build && cd extension && zip -r ../palsplan-web-protector.zip ."
   },
   "dependencies": {
     "link-shield": "^1.0.0",
