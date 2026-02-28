@@ -4,6 +4,30 @@ import "./App.css";
 import BlockedInfo from "./components/BlockedInfo.jsx";
 
 /**
+ * Regular expression pattern to match and remove script tags and their content.
+ * Matches: <script...>...</script> including attributes and nested content.
+ */
+const SCRIPT_TAG_PATTERN = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi;
+
+/**
+ * Cached textarea element for efficient HTML entity decoding.
+ * Created once and reused across sanitization calls.
+ */
+let cachedTextarea = null;
+
+/**
+ * Gets or creates the cached textarea element for HTML entity decoding.
+ * 
+ * @returns {HTMLTextAreaElement} The textarea element
+ */
+function getTextarea() {
+  if (!cachedTextarea) {
+    cachedTextarea = document.createElement("textarea");
+  }
+  return cachedTextarea;
+}
+
+/**
  * Sanitizes a string to prevent XSS attacks.
  * Removes any HTML tags and dangerous characters.
  * 
@@ -13,12 +37,12 @@ import BlockedInfo from "./components/BlockedInfo.jsx";
 function sanitizeInput(input) {
   if (!input || typeof input !== "string") return "";
   
-  // Remove HTML tags and script content
-  let sanitized = input.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
+  // Remove script tags and their content using the named pattern
+  let sanitized = input.replace(SCRIPT_TAG_PATTERN, "");
   sanitized = sanitized.replace(/<[^>]+>/g, "");
   
-  // Decode HTML entities to prevent double encoding attacks
-  const textarea = document.createElement("textarea");
+  // Decode HTML entities to prevent double encoding attacks using cached textarea
+  const textarea = getTextarea();
   textarea.innerHTML = sanitized;
   sanitized = textarea.value;
   

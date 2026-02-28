@@ -630,7 +630,7 @@ const recentlyBlockedUrls = new Map();
 /**
  * Maximum number of blocked URLs to track per tab.
  */
-const MAX_BLOCKED_HISTORY = 50;
+const MAX_BLOCKED_URLS_PER_TAB = 50;
 
 /**
  * Enhanced blocking that prevents back button bypasses.
@@ -697,7 +697,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(
       blockedSet.add(url);
       
       // Limit the size of tracked URLs
-      if (blockedSet.size > MAX_BLOCKED_HISTORY) {
+      if (blockedSet.size > MAX_BLOCKED_URLS_PER_TAB) {
         const firstUrl = blockedSet.values().next().value;
         blockedSet.delete(firstUrl);
       }
@@ -744,7 +744,11 @@ chrome.management.onDisabled.addListener((info) => {
  * This prevents users from quickly hitting back/forward to bypass the block.
  */
 const blockTimestamps = new Map();
-const BLOCK_COOLDOWN_MS = 2000; // 2 seconds minimum between blocks
+/**
+ * Minimum time (in milliseconds) that must pass between blocking events.
+ * Prevents users from rapidly navigating away from blocked pages to bypass protection.
+ */
+const RAPID_NAVIGATION_COOLDOWN_MS = 2000; // 2 seconds
 
 chrome.webNavigation.onBeforeNavigate.addListener(
   function (details) {
@@ -761,7 +765,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(
     
     // If user navigates away from blocked page within cooldown period
     const lastBlockTime = blockTimestamps.get(tabId);
-    if (lastBlockTime && Date.now() - lastBlockTime < BLOCK_COOLDOWN_MS) {
+    if (lastBlockTime && Date.now() - lastBlockTime < RAPID_NAVIGATION_COOLDOWN_MS) {
       // Re-evaluate the URL they're trying to visit
       let hostname;
       try {
