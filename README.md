@@ -3,7 +3,7 @@
 [![Build & Package Extension](https://github.com/SystemInfomation/cdn-hosting/actions/workflows/build-extension.yml/badge.svg)](https://github.com/SystemInfomation/cdn-hosting/actions/workflows/build-extension.yml)
 [![Download Extension ZIP](https://img.shields.io/badge/Download-Extension%20ZIP-blue?style=flat&logo=googlechrome)](https://github.com/SystemInfomation/cdn-hosting/releases/latest/download/palsplan-web-protector.zip)
 
-Chrome extension + hosted blocked page that protects users from insecure connections, adult content, gaming websites, and malicious/suspicious websites. Works as a normal Chrome extension without requiring enterprise enrollment or special policies.
+Chrome extension + hosted blocked page that protects users from insecure connections, adult content, gaming websites, personal/social media, and malicious/suspicious websites. Works as a normal Chrome extension without requiring enterprise enrollment or special policies.
 
 ---
 
@@ -39,7 +39,8 @@ palsplan-web-protector/
 | URL interception | `chrome.webNavigation.onBeforeNavigate` | Only main frames — never iframes |
 | HTTP blocking | Protocol check | Blocks all insecure HTTP connections |
 | Localhost blocking | Hostname check | Blocks localhost, 127.0.0.1, ::1, and loopback addresses |
-| Gaming detection | Single compiled `RegExp` over the URL | Blocks Roblox, Minecraft, Steam, Discord, Twitch, and 30+ gaming sites |
+| Gaming detection | Single compiled `RegExp` over the URL | Blocks Roblox, Minecraft, Steam, Discord, Twitch, and 50+ gaming sites |
+| Personal/Social detection | Single compiled `RegExp` over the URL | Blocks Facebook, Instagram, Twitter, YouTube, TikTok, blogs, and social media |
 | Adult detection | Single compiled `RegExp` over the URL | ~50 ns per check |
 | Malware detection | [link-shield](https://github.com/HamzaMohammed89/link-shield) — fully offline heuristics | No external API calls |
 | Result caching | In-memory `Map` (LRU-style, max 500 entries) | Zero-latency repeat navigations |
