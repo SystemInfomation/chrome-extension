@@ -2,8 +2,11 @@
  * PalsPlan Web Protector — background service worker
  *
  * Intercepts main_frame navigation requests and blocks:
- *  1. Adult/explicit content  — detected via keyword/pattern matching on the URL
- *  2. Malicious/suspicious sites — detected via link-shield (offline, heuristic)
+ *  1. HTTP (insecure) connections
+ *  2. Localhost and loopback addresses
+ *  3. Gaming websites (Roblox, Steam, Discord, etc.)
+ *  4. Adult/explicit content — detected via keyword/pattern matching on the URL
+ *  5. Malicious/suspicious sites — detected via link-shield (offline, heuristic)
  *
  * When a URL is blocked the tab is redirected to the hosted blocked page at
  * https://blocked.palsplan.app with the original URL and block reason encoded
