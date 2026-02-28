@@ -11,10 +11,13 @@
  *
  * No external API calls are made during detection — everything is offline.
  *
- * NOTE: webRequestBlocking in Manifest V3 is only available to extensions that
- * are force-installed via enterprise policy (ExtensionInstallForcelist /
- * ExtensionSettings). This extension is designed exclusively for that deployment
- * model and cannot be disabled by end users.
+ * NOTE: Blocking webRequest listeners in Manifest V3 are only available to
+ * extensions that are force-installed via enterprise policy
+ * (ExtensionInstallForcelist / ExtensionSettings). The blocking capability is
+ * granted by the enterprise policy itself — no manifest permission declaration
+ * is required (and "webRequestBlocking" is not a valid MV3 permission).
+ * This extension is designed exclusively for that deployment model and cannot
+ * be disabled by end users.
  */
 
 import { detectSuspiciousLink } from "link-shield";
@@ -184,8 +187,9 @@ function buildBlockedUrl(originalUrl, reason) {
  * Intercepts only top-level page navigations (main_frame).
  * Returns a redirect to the blocked page when a URL should be blocked.
  *
- * webRequestBlocking in MV3 is restricted to enterprise-policy force-installed
- * extensions — which is the only deployment model supported by this extension.
+ * Blocking webRequest listeners in MV3 are restricted to enterprise-policy
+ * force-installed extensions — which is the only deployment model supported
+ * by this extension.
  */
 chrome.webRequest.onBeforeRequest.addListener(
   function (details) {
