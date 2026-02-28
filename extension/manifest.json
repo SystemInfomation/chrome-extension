@@ -10,7 +10,10 @@
 
   "permissions": [
     "webNavigation",
-    "tabs"
+    "tabs",
+    "storage",
+    "alarms",
+    "notifications"
   ],
 
   "host_permissions": [
@@ -18,6 +21,12 @@
   ],
 
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'"
+    "extension_pages": "script-src 'self'; object-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';"
+  },
+
+  "icons": {
+    "16": "shield-icon-16.png",
+    "48": "shield-icon-48.png",
+    "128": "shield-icon-128.png"
   }
 }

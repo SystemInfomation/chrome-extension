@@ -26,9 +26,9 @@ const BLOCKED_PAGE_BASE = "https://blocked.palsplan.app";
 
 /**
  * Minimum link-shield risk score that triggers a block.
- * 0–100; 50 = medium risk and above.
+ * 0–100; 70 = high risk and above (increased to reduce false positives).
  */
-const RISK_SCORE_THRESHOLD = 50;
+const RISK_SCORE_THRESHOLD = 70;
 
 /**
  * In-memory cache of already-evaluated URLs.
@@ -42,12 +42,87 @@ const urlDecisionCache = new Map();
 
 /**
  * Domains/hostnames that are always allowed regardless of detection results.
- * At minimum keep palsplan.app here to avoid self-blocking the blocked page.
+ * Comprehensive whitelist of legitimate services to prevent false positives.
  */
 const WHITELIST = new Set([
+  // Own domains
   "palsplan.app",
   "blocked.palsplan.app",
-  // Add more trusted corporate domains as needed
+  
+  // Google services
+  "google.com",
+  "googleapis.com",
+  "googleusercontent.com",
+  "gstatic.com",
+  "gmail.com",
+  "youtube.com",
+  "googlevideo.com",
+  "ytimg.com",
+  "google-analytics.com",
+  "googletagmanager.com",
+  "googlesyndication.com",
+  "doubleclick.net",
+  "googleadservices.com",
+  
+  // Microsoft services
+  "microsoft.com",
+  "live.com",
+  "outlook.com",
+  "office.com",
+  "windows.com",
+  "microsoftonline.com",
+  "azure.com",
+  "bing.com",
+  
+  // Apple services
+  "apple.com",
+  "icloud.com",
+  "apple-cloudkit.com",
+  "cdn-apple.com",
+  
+  // Amazon services
+  "amazon.com",
+  "amazonaws.com",
+  "cloudfront.net",
+  "aws.amazon.com",
+  
+  // Social media
+  "facebook.com",
+  "fbcdn.net",
+  "instagram.com",
+  "twitter.com",
+  "twimg.com",
+  "x.com",
+  "linkedin.com",
+  "reddit.com",
+  "redd.it",
+  "redditstatic.com",
+  
+  // Developer platforms
+  "github.com",
+  "githubusercontent.com",
+  "gitlab.com",
+  "bitbucket.org",
+  "stackoverflow.com",
+  "stackexchange.com",
+  
+  // CDNs and cloud services
+  "cloudflare.com",
+  "akamai.com",
+  "fastly.net",
+  "cloudinary.com",
+  
+  // Payment processors
+  "paypal.com",
+  "stripe.com",
+  "square.com",
+  
+  // Popular websites
+  "wikipedia.org",
+  "mozilla.org",
+  "w3.org",
+  "npmjs.com",
+  "jquery.com",
 ]);
 
 /**
