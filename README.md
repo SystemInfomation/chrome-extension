@@ -1,5 +1,7 @@
 # PalsPlan Web Protector
 
+[![Build & Package Extension](https://github.com/SystemInfomation/cdn-hosting/actions/workflows/build-extension.yml/badge.svg)](https://github.com/SystemInfomation/cdn-hosting/actions/workflows/build-extension.yml)
+
 Enterprise Chrome extension + hosted blocked page that protects employees from adult content and malicious/suspicious websites — with **zero user-facing UI** and **zero ability to disable**.
 
 ---
@@ -73,10 +75,13 @@ The webpack bundle is written to `extension/dist/background.bundle.js` (~9 KB mi
 
 ### Publishing to the Chrome Web Store
 
-1. Zip the `extension/` folder **after** running `npm run build`:
+1. Build and package the extension with a single command:
    ```bash
-   cd extension && zip -r ../palsplan-web-protector.zip . && cd ..
+   npm run pack
    ```
+   This runs `npm run build` first (producing `extension/dist/background.bundle.js`) and then creates `palsplan-web-protector.zip` with `manifest.json` at the zip root, ready for upload.
+
+   > **Tip — no local toolchain?** Click the **Build & Package Extension** badge above → open the latest run → click **Run workflow**. Once it completes, download `palsplan-web-protector` from the **Artifacts** section.
 2. Go to the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole)
 3. Click **Add new item** → upload the `.zip`
 4. Set **Visibility** to **Private** (for internal enterprise use)
