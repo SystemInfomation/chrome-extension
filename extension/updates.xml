@@ -17,6 +17,6 @@
 -->
 <gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
   <app appid='mdagnhgcaahpijdbikbockbjjcocabel'>
-    <updatecheck codebase='https://blocked.palsplan.app/palsplan-web-protector.crx' version='1.0.0' />
+    <updatecheck codebase='https://blocked.palsplan.app/palsplan-web-protector.crx' version='3.0.0' />
   </app>
 </gupdate>
