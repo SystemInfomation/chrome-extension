@@ -98,11 +98,11 @@ export default function App() {
       <div className="card">
         {/* ── Shield icon ── */}
         <div className="icon-wrapper">
-          <ShieldAlert size={44} color="#ff3b5c" strokeWidth={1.6} />
+          <ShieldAlert size={44} color="#ffffff" strokeWidth={2} />
         </div>
 
         {/* ── Main heading ── */}
-        <h1 className="heading">ACCESS BLOCKED</h1>
+        <h1 className="heading">Access Blocked</h1>
         <p className="subtitle">
           This site has been restricted by PalsPlan Web Protector
         </p>
