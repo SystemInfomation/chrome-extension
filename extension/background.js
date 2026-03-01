@@ -326,7 +326,6 @@ const STREAMING_REGEX = new RegExp(
     "\\brumble\\.com\\b",
     "\\bodysee\\.com\\b",
     // Music streaming
-    "\\bspotify\\.com\\b",
     "\\bsoundcloud\\.com\\b",
     "\\bpandora\\.com\\b",
     "\\bdeezer\\.com\\b",
