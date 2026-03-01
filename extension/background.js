@@ -109,6 +109,8 @@ const WHITELIST = new Set([
   "bitbucket.org",
   "stackoverflow.com",
   "stackexchange.com",
+  "vercel.com",
+  "render.com",
   
   // CDNs and cloud services
   "cloudflare.com",
