@@ -578,7 +578,9 @@
       }
 
       /**
-       * Sanitize a string to prevent XSS — strips HTML tags and dangerous chars.
+       * Sanitize a string to prevent XSS.
+       * Setting textContent encodes HTML entities; reading it back yields
+       * the safely escaped plain-text representation.
        * @param {string} input
        * @returns {string}
        */
@@ -586,7 +588,7 @@
         if (!input || typeof input !== "string") return "";
         var text = input.slice(0, MAX_INPUT_LENGTH);
         var el = document.createElement("div");
-        el.textContent = text; // safely encodes any HTML
+        el.textContent = text;
         return el.textContent;
       }
 
@@ -697,15 +699,19 @@
         showToast("Bypass code accepted! Redirecting\u2026", "success");
 
         // Redirect to the original blocked URL after a brief delay
-        var target = blockedUrl || "about:blank";
+        var target = blockedUrl || "";
         // Validate redirect target — only allow http/https
+        var validTarget = false;
         try {
           var u = new URL(target);
-          if (u.protocol !== "http:" && u.protocol !== "https:") {
-            target = "about:blank";
+          if (u.protocol === "http:" || u.protocol === "https:") {
+            validTarget = true;
           }
-        } catch (_) {
-          target = "about:blank";
+        } catch (_) { /* invalid URL */ }
+
+        if (!validTarget) {
+          showToast("No valid URL to redirect to", "error");
+          return;
         }
 
         setTimeout(function () {
