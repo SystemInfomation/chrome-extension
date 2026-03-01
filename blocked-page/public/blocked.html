@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Access Blocked | PalsPlan Web Protector</title>
+
+  <!-- Security headers (also set server-side via _headers) -->
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  <meta http-equiv="X-Frame-Options" content="DENY" />
+  <meta name="referrer" content="no-referrer" />
+
+  <!-- Tailwind CSS via CDN (latest) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // Tailwind configuration — customize accent colors here if needed
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    /* Subtle geometric overlay pattern for premium depth */
+    .geo-pattern {
+      background-image:
+        /* Faint squares */
+        linear-gradient(45deg, rgba(241,245,249,0.04) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(241,245,249,0.04) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, rgba(241,245,249,0.04) 75%),
+        linear-gradient(-45deg, transparent 75%, rgba(241,245,249,0.04) 75%),
+        /* Faint circles */
+        radial-gradient(circle 80px at 20% 30%, rgba(241,245,249,0.035) 0%, transparent 100%),
+        radial-gradient(circle 60px at 70% 60%, rgba(241,245,249,0.03) 0%, transparent 100%),
+        radial-gradient(circle 100px at 50% 80%, rgba(241,245,249,0.04) 0%, transparent 100%);
+      background-size: 80px 80px, 80px 80px, 80px 80px, 80px 80px, 100% 100%, 100% 100%, 100% 100%;
+    }
+
+    /* Toast slide-in animation */
+    @keyframes toast-in {
+      from { opacity: 0; transform: translateX(100%); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes toast-out {
+      from { opacity: 1; transform: translateX(0); }
+      to   { opacity: 0; transform: translateX(100%); }
+    }
+    .toast-enter { animation: toast-in 0.3s ease-out forwards; }
+    .toast-exit  { animation: toast-out 0.3s ease-in forwards; }
+
+    /* Modal fade */
+    @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    .modal-enter { animation: fade-in 0.2s ease-out forwards; }
+  </style>
+</head>
+
+<body class="min-h-screen bg-gradient-to-b from-[#f8fafc] to-[#e0f2fe] geo-pattern flex items-center justify-center p-4 font-sans antialiased">
+
+  <!-- ═══════════════════════════════════════════════════════
+       MAIN CARD
+       ═══════════════════════════════════════════════════════ -->
+  <div class="w-full max-w-lg bg-white rounded-3xl shadow-[0_25px_50px_-12px_rgb(0_0_0/0.15)] overflow-hidden">
+
+    <div class="px-6 pt-8 pb-6 sm:px-8">
+
+      <!-- ── SCHOOL / ORGANIZATION LOGO ──
+           CUSTOMIZE SCHOOL LOGO HERE — replace the src URL below -->
+      <div class="flex justify-center mb-5">
+        <img
+          id="schoolLogo"
+          src="https://blocked.palsplan.app/shield-icon.svg"
+          alt="Organization logo"
+          class="h-[130px] w-auto object-contain"
+        />
+        <!-- ← REPLACE WITH YOUR SCHOOL LOGO URL -->
+      </div>
+
+      <!-- ── HEADING ── -->
+      <h1 class="text-3xl font-bold tracking-tight text-gray-900 text-center mb-3">
+        This webpage is currently blocked.
+      </h1>
+
+      <!-- ── CONTACT PARAGRAPH ──
+           CHANGE CONTACT EMAIL — update the email address and text below -->
+      <p class="text-sm text-gray-600 text-center mb-6 leading-relaxed">
+        Please contact <strong>CMCB IT Department</strong> via
+        <a href="mailto:Helpdesk@cmc.vic.edu.au"
+           class="text-emerald-600 underline hover:text-emerald-700 transition-colors">
+          Helpdesk@cmc.vic.edu.au
+        </a>
+        for any additional support.
+      </p>
+
+      <!-- ═══════════════════════════════════════════════════
+           INFO PANEL — blocked site details
+           CHANGE POLICY NAMES — edit the default values below
+           ═══════════════════════════════════════════════════ -->
+      <div class="bg-[#f9fafb] border border-gray-200 rounded-2xl p-5 mb-5">
+        <dl class="divide-y divide-gray-200 text-sm">
+
+          <!-- Website -->
+          <div class="flex flex-col sm:flex-row sm:justify-between py-2.5 first:pt-0 gap-1">
+            <dt class="font-medium text-gray-500 shrink-0 sm:w-40">Website</dt>
+            <dd class="font-medium text-gray-900 break-all flex items-center gap-1.5">
+              <span id="infoWebsite">—</span>
+              <!-- Copy URL button -->
+              <button
+                id="copyUrlBtn"
+                type="button"
+                title="Copy URL to clipboard"
+                aria-label="Copy blocked URL to clipboard"
+                class="inline-flex items-center justify-center w-6 h-6 rounded-md text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all shrink-0 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <!-- Clipboard icon (SVG) -->
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                </svg>
+              </button>
+            </dd>
+          </div>
+
+          <!-- Path -->
+          <div class="flex flex-col sm:flex-row sm:justify-between py-2.5 gap-1">
+            <dt class="font-medium text-gray-500 shrink-0 sm:w-40">Path</dt>
+            <dd id="infoPath" class="font-medium text-gray-900 break-all">/</dd>
+          </div>
+
+          <!-- Policy Name — CHANGE POLICY NAMES here -->
+          <div class="flex flex-col sm:flex-row sm:justify-between py-2.5 gap-1">
+            <dt class="font-medium text-gray-500 shrink-0 sm:w-40">Policy Name</dt>
+            <dd id="infoPolicyName" class="font-medium text-gray-900">Block Unclassified Sites</dd>
+          </div>
+
+          <!-- Rule Type — CHANGE RULE TYPE here -->
+          <div class="flex flex-col sm:flex-row sm:justify-between py-2.5 gap-1">
+            <dt class="font-medium text-gray-500 shrink-0 sm:w-40">Rule Type</dt>
+            <dd id="infoRuleType" class="font-medium text-gray-900">Standard Filtering</dd>
+          </div>
+
+          <!-- Application / Category -->
+          <div class="flex flex-col sm:flex-row sm:justify-between py-2.5 gap-1">
+            <dt class="font-medium text-gray-500 shrink-0 sm:w-40">Application/Category</dt>
+            <dd id="infoCategory" class="font-medium text-gray-900">—</dd>
+          </div>
+
+          <!-- Your IP -->
+          <div class="flex flex-col sm:flex-row sm:justify-between py-2.5 last:pb-0 gap-1">
+            <dt class="font-medium text-gray-500 shrink-0 sm:w-40">Your IP</dt>
+            <dd id="infoIp" class="font-medium text-gray-900">—</dd>
+          </div>
+
+        </dl>
+      </div>
+
+      <!-- ── REPORT HELPER TEXT ── -->
+      <p class="text-xs text-gray-500 text-center mb-5 leading-relaxed">
+        If you believe this site has been incorrectly blocked, you can
+        <button
+          id="reportBtn"
+          type="button"
+          class="text-emerald-600 underline hover:text-emerald-700 transition-colors font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 rounded"
+        >report it to your administrator</button>.
+      </p>
+
+      <!-- ═══════════════════════════════════════════════════
+           BYPASS CODE SECTION
+           ═══════════════════════════════════════════════════ -->
+      <div class="bg-sky-50 border border-sky-200 rounded-2xl p-5 mb-5">
+        <label for="bypassInput" class="block text-sm font-bold text-sky-800 mb-3">
+          Enter your bypass code to unblock this link
+        </label>
+        <div class="flex flex-col sm:flex-row gap-2.5">
+          <input
+            id="bypassInput"
+            type="text"
+            placeholder="Bypass code"
+            autocomplete="off"
+            aria-label="Bypass code"
+            class="flex-1 px-4 py-2.5 text-sm rounded-2xl border border-sky-300 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+          />
+          <button
+            id="unlockBtn"
+            type="button"
+            class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-2xl transition-all hover:scale-105 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 active:scale-100 whitespace-nowrap"
+          >
+            Unlock
+          </button>
+        </div>
+      </div>
+
+      <!-- ── FOOTER BRANDING ── -->
+      <p class="text-xs text-gray-400 text-center select-none">
+        PalsPlan Web Protector
+      </p>
+
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       REPORT MODAL
+       ═══════════════════════════════════════════════════════ -->
+  <div
+    id="reportModal"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Report sent confirmation"
+    class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
+  >
+    <!-- Backdrop -->
+    <div id="modalBackdrop" class="absolute inset-0 bg-black/40"></div>
+    <!-- Dialog box -->
+    <div class="relative bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 text-center modal-enter">
+      <!-- Check icon -->
+      <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+        </svg>
+      </div>
+      <h2 class="text-lg font-semibold text-gray-900 mb-2">Report Sent</h2>
+      <p class="text-sm text-gray-600 mb-5">
+        Report sent to IT (demo). Your administrator will review this request.
+      </p>
+      <button
+        id="modalCloseBtn"
+        type="button"
+        class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500"
+      >
+        Close
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       TOAST CONTAINER (top-right, aria-live for accessibility)
+       ═══════════════════════════════════════════════════════ -->
+  <div id="toastContainer" aria-live="polite" class="fixed top-4 right-4 z-[60] flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       JAVASCRIPT — functionality
+       ═══════════════════════════════════════════════════════ -->
+  <script>
+    (function () {
+      "use strict";
+
+      // ── Helpers ──────────────────────────────────────────
+
+      /**
+       * Sanitize a string to prevent XSS — strips HTML tags and dangerous chars.
+       * @param {string} input
+       * @returns {string}
+       */
+      function sanitize(input) {
+        if (!input || typeof input !== "string") return "";
+        var text = input.slice(0, 2048);
+        var el = document.createElement("div");
+        el.textContent = text;        // safely encodes any HTML
+        return el.textContent.replace(/[<>'"]/g, "");
+      }
+
+      /**
+       * Show a toast notification (top-right, auto-dismiss).
+       * @param {string} message
+       * @param {"success"|"error"} type
+       */
+      function showToast(message, type) {
+        var container = document.getElementById("toastContainer");
+        var toast = document.createElement("div");
+
+        var bgClass = type === "success"
+          ? "bg-emerald-600"
+          : "bg-red-500";
+
+        toast.className =
+          "pointer-events-auto px-4 py-3 rounded-xl text-white text-sm font-medium shadow-lg toast-enter " + bgClass;
+        toast.textContent = message;
+        toast.setAttribute("role", "status");
+
+        container.appendChild(toast);
+
+        // Auto-dismiss after 3.5 seconds
+        setTimeout(function () {
+          toast.classList.remove("toast-enter");
+          toast.classList.add("toast-exit");
+          toast.addEventListener("animationend", function () {
+            toast.remove();
+          });
+        }, 3500);
+      }
+
+      // ── Read query parameters ────────────────────────────
+
+      var params = new URLSearchParams(window.location.search);
+
+      var rawUrl      = params.get("url") || params.get("blockedUrl") || "";
+      var rawPath     = params.get("path") || "";
+      var rawCategory = params.get("category") || params.get("reason") || "";
+      var rawIp       = params.get("ip") || "";
+
+      var blockedUrl = sanitize(rawUrl ? decodeURIComponent(rawUrl) : "");
+      var pathValue  = sanitize(rawPath ? decodeURIComponent(rawPath) : "");
+      var category   = sanitize(rawCategory ? decodeURIComponent(rawCategory) : "");
+      var ipValue    = sanitize(rawIp ? decodeURIComponent(rawIp) : "");
+
+      // If URL is present but no explicit path, try to extract it
+      if (blockedUrl && !pathValue) {
+        try {
+          var parsed = new URL(blockedUrl);
+          pathValue = parsed.pathname || "/";
+        } catch (_) {
+          pathValue = "/";
+        }
+      }
+
+      // Fallback IP placeholder
+      if (!ipValue) {
+        ipValue = "192.168.1.x";
+      }
+
+      // ── Populate info panel ──────────────────────────────
+
+      document.getElementById("infoWebsite").textContent  = blockedUrl || "—";
+      document.getElementById("infoPath").textContent      = pathValue || "/";
+      document.getElementById("infoCategory").textContent  = category || "—";
+      document.getElementById("infoIp").textContent        = ipValue;
+
+      // ── Copy URL button ──────────────────────────────────
+
+      document.getElementById("copyUrlBtn").addEventListener("click", function () {
+        if (!blockedUrl) {
+          showToast("No URL to copy", "error");
+          return;
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(blockedUrl).then(function () {
+            showToast("URL copied to clipboard", "success");
+          }).catch(function () {
+            showToast("Failed to copy URL", "error");
+          });
+        } else {
+          // Fallback for older browsers
+          var ta = document.createElement("textarea");
+          ta.value = blockedUrl;
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          try {
+            document.execCommand("copy");
+            showToast("URL copied to clipboard", "success");
+          } catch (_) {
+            showToast("Failed to copy URL", "error");
+          }
+          document.body.removeChild(ta);
+        }
+      });
+
+      // ── Unlock / bypass code ─────────────────────────────
+
+      var bypassInput = document.getElementById("bypassInput");
+      var unlockBtn   = document.getElementById("unlockBtn");
+
+      function handleUnlock() {
+        var code = bypassInput.value.trim();
+        if (!code) {
+          showToast("Please enter a bypass code", "error");
+          bypassInput.focus();
+          return;
+        }
+
+        showToast("Bypass code accepted! Redirecting\u2026", "success");
+
+        // Redirect to the original blocked URL after a brief delay
+        var target = blockedUrl || "about:blank";
+        // Validate redirect target — only allow http/https
+        try {
+          var u = new URL(target);
+          if (u.protocol !== "http:" && u.protocol !== "https:") {
+            target = "about:blank";
+          }
+        } catch (_) {
+          target = "about:blank";
+        }
+
+        setTimeout(function () {
+          window.location.href = target;
+        }, 1500);
+      }
+
+      unlockBtn.addEventListener("click", handleUnlock);
+
+      // Support Enter key on bypass input
+      bypassInput.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          handleUnlock();
+        }
+      });
+
+      // ── Report modal ─────────────────────────────────────
+
+      var reportModal   = document.getElementById("reportModal");
+      var reportBtn     = document.getElementById("reportBtn");
+      var modalCloseBtn = document.getElementById("modalCloseBtn");
+      var modalBackdrop = document.getElementById("modalBackdrop");
+
+      function openModal() {
+        reportModal.classList.remove("hidden");
+      }
+
+      function closeModal() {
+        reportModal.classList.add("hidden");
+      }
+
+      reportBtn.addEventListener("click", openModal);
+      modalCloseBtn.addEventListener("click", closeModal);
+      modalBackdrop.addEventListener("click", closeModal);
+
+      // Close modal on Escape key
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && !reportModal.classList.contains("hidden")) {
+          closeModal();
+        }
+      });
+
+    })();
+  </script>
+</body>
+</html>
