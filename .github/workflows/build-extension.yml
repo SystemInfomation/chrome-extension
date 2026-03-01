@@ -31,7 +31,7 @@ jobs:
 
       - name: Publish extension to GitHub Releases
         run: |
-          gh release delete latest --yes 2>/dev/null || true
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
           gh release create latest palsplan-web-protector.zip \
             --title "Latest Build" \
             --notes "Pre-built extension ZIP. Download \`palsplan-web-protector.zip\`, then load it as an unpacked extension in Chrome (\`chrome://extensions\` → Enable Developer mode → Load unpacked → select the unzipped folder)." \
