@@ -95,23 +95,12 @@ const WHITELIST = new Set([
   "apple-cloudkit.com",
   "cdn-apple.com",
   
-  // Amazon services
-  "amazon.com",
+  // Amazon services (AWS kept for developer tools, shopping domains blocked separately)
   "amazonaws.com",
   "cloudfront.net",
   "aws.amazon.com",
   
-  // Social media
-  "facebook.com",
-  "fbcdn.net",
-  "instagram.com",
-  "twitter.com",
-  "twimg.com",
-  "x.com",
-  "linkedin.com",
-  "reddit.com",
-  "redd.it",
-  "redditstatic.com",
+  // Note: Social media domains removed from whitelist — they are blocked by policy
   
   // Developer platforms
   "github.com",
@@ -226,32 +215,58 @@ const GAMING_REGEX = new RegExp(
 
 /**
  * Personal/social websites keywords checked against the full lower-cased URL.
- * Blocks access to social media, blogs, video sharing, and personal sites.
+ * Blocks access to social media, messaging, blogs, and personal sites.
  */
 const PERSONAL_REGEX = new RegExp(
   [
-    // Social media platforms
+    // Major social media platforms
     "\\bfacebook\\.com\\b",
     "\\bfb\\.com\\b",
     "\\bfbcdn\\b",
     "\\binstagram\\.com\\b",
     "\\btwitter\\.com\\b",
     "\\btwimg\\b",
+    "\\bx\\.com\\b",
     "\\btiktok\\.com\\b",
     "\\bsnapchat\\.com\\b",
     "\\bpinterest\\.com\\b",
     "\\btumblr\\.com\\b",
-    "\\bwhatsapp\\.com\\b",
-    "\\btelegram\\.org\\b",
-    "\\bviber\\.com\\b",
+    "\\breddit\\.com\\b",
+    "\\bredd\\.it\\b",
+    "\\bredditstatic\\.com\\b",
+    "\\blinkedin\\.com\\b",
     "\\bweibo\\.com\\b",
     "\\bvk\\.com\\b",
-    // Video and streaming
-    "\\byoutube\\.com\\b",
-    "\\byoutu\\.be\\b",
-    "\\bvimeo\\.com\\b",
-    "\\bdailymotion\\.com\\b",
-    // Blogging platforms
+    "\\bthreads\\.net\\b",
+    "\\bmastodon\\.social\\b",
+    "\\bmastodon\\.online\\b",
+    "\\bbereal\\.com\\b",
+    "\\blemon8-app\\.com\\b",
+    "\\btruth social\\b",
+    "\\btruthsocial\\.com\\b",
+    "\\bparler\\.com\\b",
+    "\\bgab\\.com\\b",
+    "\\bgettr\\.com\\b",
+    "\\bclubhouse\\.com\\b",
+    "\\bmewe\\.com\\b",
+    "\\bmyspace\\.com\\b",
+    "\\bask\\.fm\\b",
+    "\\bcuriouscat\\.me\\b",
+    "\\bquora\\.com\\b",
+    // Messaging platforms
+    "\\bwhatsapp\\.com\\b",
+    "\\btelegram\\.org\\b",
+    "\\btelegram\\.me\\b",
+    "\\bviber\\.com\\b",
+    "\\bsignal\\.org\\b",
+    "\\bwechat\\.com\\b",
+    "\\bweixin\\.qq\\.com\\b",
+    "\\bline\\.me\\b",
+    "\\bkik\\.com\\b",
+    "\\bwickr\\.com\\b",
+    "\\belement\\.io\\b",
+    "\\bslack\\.com\\b",
+    // Blogging and personal website platforms
     "\\bblogger\\.com\\b",
     "\\bblogspot\\.com\\b",
     "\\bmedium\\.com\\b",
@@ -259,6 +274,342 @@ const PERSONAL_REGEX = new RegExp(
     "\\bwix\\.com\\b",
     "\\bsquarespace\\.com\\b",
     "\\bweebly\\.com\\b",
+    "\\bwordpress\\.com\\b",
+    "\\blivejournal\\.com\\b",
+    "\\bdeviantart\\.com\\b",
+    // Forums and communities
+    "\\b4chan\\.org\\b",
+    "\\b8chan\\b",
+    "\\b8kun\\b",
+    "\\bvoat\\b",
+    "\\bimgur\\.com\\b",
+    "\\b9gag\\.com\\b",
+    "\\bifunny\\.co\\b",
+    "\\bfunnyjunk\\.com\\b",
+  ].join("|"),
+  "i"
+);
+
+/**
+ * Video streaming and entertainment sites.
+ * Blocks access to streaming platforms that waste productivity.
+ */
+const STREAMING_REGEX = new RegExp(
+  [
+    // Video streaming
+    "\\byoutube\\.com\\b",
+    "\\byoutu\\.be\\b",
+    "\\bvimeo\\.com\\b",
+    "\\bdailymotion\\.com\\b",
+    "\\bnetflix\\.com\\b",
+    "\\bhulu\\.com\\b",
+    "\\bdisneyplus\\.com\\b",
+    "\\bhbomax\\.com\\b",
+    "\\bmax\\.com\\b",
+    "\\bparamountplus\\.com\\b",
+    "\\bpeacocktv\\.com\\b",
+    "\\bcrunchyroll\\.com\\b",
+    "\\bfunimation\\.com\\b",
+    "\\bpluto\\.tv\\b",
+    "\\btubi\\.tv\\b",
+    "\\bprimevideo\\.com\\b",
+    "\\bappletv\\.com\\b",
+    "\\broku\\.com\\b",
+    "\\bsling\\.com\\b",
+    "\\bfubo\\.tv\\b",
+    "\\bphilo\\.com\\b",
+    "\\bespn\\.com\\b",
+    "\\bdazn\\.com\\b",
+    "\\bbitchute\\.com\\b",
+    "\\brumble\\.com\\b",
+    "\\bodysee\\.com\\b",
+    // Music streaming
+    "\\bspotify\\.com\\b",
+    "\\bsoundcloud\\.com\\b",
+    "\\bpandora\\.com\\b",
+    "\\bdeezer\\.com\\b",
+    "\\btidal\\.com\\b",
+    "\\blast\\.fm\\b",
+    "\\bbandcamp\\.com\\b",
+    // Podcast platforms
+    "\\bpodbean\\.com\\b",
+    "\\bstitcher\\.com\\b",
+    "\\bovercast\\.fm\\b",
+    "\\banchor\\.fm\\b",
+  ].join("|"),
+  "i"
+);
+
+/**
+ * Online shopping sites.
+ * Blocks access to e-commerce platforms during work hours.
+ */
+const SHOPPING_REGEX = new RegExp(
+  [
+    "\\bamazon\\.com\\b",
+    "\\bamazon\\.co\\b",
+    "\\bebay\\.com\\b",
+    "\\betsy\\.com\\b",
+    "\\bwalmart\\.com\\b",
+    "\\btarget\\.com\\b",
+    "\\bbestbuy\\.com\\b",
+    "\\baliexpress\\.com\\b",
+    "\\bwish\\.com\\b",
+    "\\bshein\\.com\\b",
+    "\\btemu\\.com\\b",
+    "\\bwayfair\\.com\\b",
+    "\\boverstock\\.com\\b",
+    "\\bnewegg\\.com\\b",
+    "\\bdhgate\\.com\\b",
+    "\\bbanggood\\.com\\b",
+    "\\bgearbest\\.com\\b",
+    "\\bzappos\\.com\\b",
+    "\\basos\\.com\\b",
+    "\\bzara\\.com\\b",
+    "\\bhm\\.com\\b",
+    "\\bnordstrom\\.com\\b",
+    "\\bmacys\\.com\\b",
+    "\\bcostco\\.com\\b",
+    "\\bhomedepot\\.com\\b",
+    "\\blowes\\.com\\b",
+    "\\bikea\\.com\\b",
+    "\\bposhmark\\.com\\b",
+    "\\bmercari\\.com\\b",
+    "\\bofferup\\.com\\b",
+    "\\bcraigslist\\.org\\b",
+    "\\bfacebookmarketplace\\b",
+    "\\bgroupon\\.com\\b",
+    "\\bslickdeals\\.net\\b",
+    "\\bdealnews\\.com\\b",
+    "\\bretailmenot\\.com\\b",
+    "\\bhoney\\.com\\b",
+  ].join("|"),
+  "i"
+);
+
+/**
+ * Gambling and betting sites.
+ * Blocks access to gambling platforms, sports betting, and lottery sites.
+ */
+const GAMBLING_REGEX = new RegExp(
+  [
+    "\\bbet365\\.com\\b",
+    "\\bdraftkings\\.com\\b",
+    "\\bfanduel\\.com\\b",
+    "\\bbetmgm\\.com\\b",
+    "\\bcaesars\\.com\\b",
+    "\\bpointsbet\\.com\\b",
+    "\\bbovada\\.lv\\b",
+    "\\bbetonline\\.ag\\b",
+    "\\b888casino\\.com\\b",
+    "\\b888poker\\.com\\b",
+    "\\bpokerstars\\.com\\b",
+    "\\bpartypoker\\.com\\b",
+    "\\bwilliamhill\\.com\\b",
+    "\\bbetfair\\.com\\b",
+    "\\bpaddy ?power\\b",
+    "\\bbwin\\.com\\b",
+    "\\bunibet\\.com\\b",
+    "\\bbetway\\.com\\b",
+    "\\b1xbet\\.com\\b",
+    "\\b22bet\\.com\\b",
+    "\\bstake\\.com\\b",
+    "\\bcasinoguru\\b",
+    "\\bonlinecasino\\b",
+    "\\bslotmachine\\b",
+    "\\bjackpotcity\\.com\\b",
+    "\\bspinpalace\\.com\\b",
+    "\\broyal ?vegas\\b",
+    "\\bcasino\\.com\\b",
+    "\\bpoker\\.com\\b",
+    "\\bbingo\\.com\\b",
+    "\\blottery\\b",
+    "\\bgambling\\b",
+    "\\bsportsbook\\b",
+    "\\bbetting\\b",
+    "\\bfanatics\\.com\\/sportsbook\\b",
+    "\\bhard ?rock ?bet\\b",
+  ].join("|"),
+  "i"
+);
+
+/**
+ * Dating platforms.
+ * Blocks access to dating and matchmaking websites.
+ */
+const DATING_REGEX = new RegExp(
+  [
+    "\\btinder\\.com\\b",
+    "\\bbumble\\.com\\b",
+    "\\bmatch\\.com\\b",
+    "\\bokcupid\\.com\\b",
+    "\\bplentyoffish\\.com\\b",
+    "\\bpof\\.com\\b",
+    "\\bhinge\\.co\\b",
+    "\\bcoffee ?meets ?bagel\\b",
+    "\\bgrindr\\.com\\b",
+    "\\bher\\.com\\b",
+    "\\beharmony\\.com\\b",
+    "\\bzoosk\\.com\\b",
+    "\\belitesingles\\.com\\b",
+    "\\bsilversingles\\.com\\b",
+    "\\bourtime\\.com\\b",
+    "\\bchristianmingle\\.com\\b",
+    "\\bjdate\\.com\\b",
+    "\\bbadoo\\.com\\b",
+    "\\bskout\\.com\\b",
+    "\\btagged\\.com\\b",
+    "\\bhappn\\.com\\b",
+    "\\blovoo\\.com\\b",
+    "\\bmeetic\\.com\\b",
+    "\\bsugarbook\\b",
+    "\\bseeking\\.com\\b",
+    "\\bashleymadison\\.com\\b",
+  ].join("|"),
+  "i"
+);
+
+/**
+ * VPN/proxy/circumvention tools.
+ * Blocks access to services designed to bypass content filters.
+ */
+const VPNPROXY_REGEX = new RegExp(
+  [
+    // VPN providers
+    "\\bnordvpn\\.com\\b",
+    "\\bexpressvpn\\.com\\b",
+    "\\bsurfshark\\.com\\b",
+    "\\bcyberghostvpn\\.com\\b",
+    "\\bprivateinternetaccess\\.com\\b",
+    "\\bprotonvpn\\.com\\b",
+    "\\bipvanish\\.com\\b",
+    "\\bwindscribe\\.com\\b",
+    "\\bmullvad\\.net\\b",
+    "\\bhotspotshield\\.com\\b",
+    "\\btunnelbear\\.com\\b",
+    "\\bhide\\.me\\b",
+    "\\bpurevpn\\.com\\b",
+    "\\bvypr vpn\\b",
+    "\\bvyprvpn\\.com\\b",
+    "\\batlasvpn\\.com\\b",
+    "\\bzenmate\\.com\\b",
+    // Proxy and anonymization services
+    "\\bhidemyass\\.com\\b",
+    "\\bkproxy\\.com\\b",
+    "\\bproxysite\\.com\\b",
+    "\\bunblocksite\\b",
+    "\\bfreeproxy\\b",
+    "\\bwebproxy\\b",
+    "\\banonymouse\\.org\\b",
+    "\\bhideipvpn\\.com\\b",
+    "\\btorproject\\.org\\b",
+    "\\btorbrowser\\b",
+    "\\bpsiphon\\b",
+    "\\blantern\\.io\\b",
+    "\\bultrasurf\\b",
+    "\\bfreegate\\b",
+    "\\bhotspot ?shield\\b",
+    // DNS bypass tools
+    "\\bnextdns\\.io\\b",
+    "\\bcloudflare-dns\\.com\\b",
+    "\\bdns-over-https\\b",
+  ].join("|"),
+  "i"
+);
+
+/**
+ * Known malicious, phishing, and unsafe sites by pattern.
+ * Also blocks URL shorteners (often used to disguise malicious links) and
+ * risky file-sharing services.
+ */
+const UNSAFE_REGEX = new RegExp(
+  [
+    // URL shorteners (commonly used to hide malicious links)
+    "\\bbit\\.ly\\b",
+    "\\btinyurl\\.com\\b",
+    "\\bgoo\\.gl\\b",
+    "\\bt\\.co\\b",
+    "\\brebrand\\.ly\\b",
+    "\\bshorturl\\.at\\b",
+    "\\bow\\.ly\\b",
+    "\\bis\\.gd\\b",
+    "\\bv\\.gd\\b",
+    "\\bcutt\\.ly\\b",
+    "\\badf\\.ly\\b",
+    "\\bbit\\.do\\b",
+    "\\bclck\\.ru\\b",
+    // Risky file-sharing / piracy / warez
+    "\\bthepiratebay\\b",
+    "\\b1337x\\.to\\b",
+    "\\brarbg\\b",
+    "\\bkickass ?torrent\\b",
+    "\\byts\\.mx\\b",
+    "\\bnyaa\\.si\\b",
+    "\\blimetorrent\\b",
+    "\\btorrentz2\\b",
+    "\\bzippyshare\\.com\\b",
+    "\\bmediafire\\.com\\b",
+    "\\bmega\\.nz\\b",
+    "\\banonfiles\\.com\\b",
+    "\\bgofile\\.io\\b",
+    "\\bfiledropper\\.com\\b",
+    "\\buploadhaven\\.com\\b",
+    "\\brapidgator\\.net\\b",
+    "\\bnitroflare\\.com\\b",
+    "\\bturbobit\\.net\\b",
+    "\\buploaded\\.net\\b",
+    // Known phishing/scam patterns
+    "\\bphish\\b",
+    "\\bscam\\b",
+    "\\bfraud\\b",
+    "\\bmalware\\b",
+    "\\bransomware\\b",
+    "\\bkeylogger\\b",
+    "\\btrojan\\b",
+    "\\bspyware\\b",
+    // Hacking tools and forums
+    "\\bhack ?forum\\b",
+    "\\bcrack\\b",
+    "\\bkeygen\\b",
+    "\\bwarez\\b",
+    "\\bnulled\\.to\\b",
+    "\\bcracked\\.io\\b",
+    "\\bleaked\\b",
+    // Crypto mining / scam tokens
+    "\\bcoinhive\\b",
+    "\\bcryptojacking\\b",
+    "\\bminingpool\\b",
+  ].join("|"),
+  "i"
+);
+
+/**
+ * News and gossip entertainment sites.
+ * Blocks major news aggregation and gossip sites for workplace productivity.
+ */
+const NEWS_GOSSIP_REGEX = new RegExp(
+  [
+    "\\bbuzzfeed\\.com\\b",
+    "\\btmz\\.com\\b",
+    "\\bboredpanda\\.com\\b",
+    "\\bdistractify\\.com\\b",
+    "\\bthechive\\.com\\b",
+    "\\bcracked\\.com\\b",
+    "\\btheonion\\.com\\b",
+    "\\bbabylon ?bee\\b",
+    "\\bviralnova\\.com\\b",
+    "\\bupworthy\\.com\\b",
+    "\\bladbible\\.com\\b",
+    "\\bunilab\\.com\\b",
+    "\\bjunkee\\.com\\b",
+    "\\bperezhilton\\.com\\b",
+    "\\bpopsugar\\.com\\b",
+    "\\bcosmopolitan\\.com\\b",
+    "\\belleonline\\.com\\b",
+    "\\benews\\.com\\b",
+    "\\buscweekly\\.com\\b",
+    "\\bpeoplemagazine\\b",
+    "\\btabloid\\b",
   ].join("|"),
   "i"
 );
@@ -341,8 +692,36 @@ function evaluate(url) {
   // 5. Adult content check (single compiled regex — very fast)
   else if (ADULT_REGEX.test(url)) {
     decision = { blocked: true, reason: "Adult Content" };
+  }
+  // 6. Video streaming and entertainment
+  else if (STREAMING_REGEX.test(url)) {
+    decision = { blocked: true, reason: "Streaming/Entertainment Blocked" };
+  }
+  // 7. Online shopping
+  else if (SHOPPING_REGEX.test(url)) {
+    decision = { blocked: true, reason: "Online Shopping Blocked" };
+  }
+  // 8. Gambling and betting
+  else if (GAMBLING_REGEX.test(url)) {
+    decision = { blocked: true, reason: "Gambling/Betting Blocked" };
+  }
+  // 9. Dating platforms
+  else if (DATING_REGEX.test(url)) {
+    decision = { blocked: true, reason: "Dating Platform Blocked" };
+  }
+  // 10. VPN/proxy circumvention tools
+  else if (VPNPROXY_REGEX.test(url)) {
+    decision = { blocked: true, reason: "VPN/Proxy Circumvention Blocked" };
+  }
+  // 11. Known unsafe/malicious patterns
+  else if (UNSAFE_REGEX.test(url)) {
+    decision = { blocked: true, reason: "Unsafe/Malicious Content Blocked" };
+  }
+  // 12. News and gossip entertainment
+  else if (NEWS_GOSSIP_REGEX.test(url)) {
+    decision = { blocked: true, reason: "News/Gossip Entertainment Blocked" };
   } else {
-    // 6. Malicious / suspicious site check (link-shield offline heuristics)
+    // 13. Malicious / suspicious site check (link-shield offline heuristics)
     try {
       const result = detectSuspiciousLink(url, { threshold: RISK_SCORE_THRESHOLD });
       if (result.suspicious || result.riskScore >= RISK_SCORE_THRESHOLD) {

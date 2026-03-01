@@ -2,6 +2,9 @@
 extension/dist/
 *.zip
 
+# Blocked-page build output
+blocked-page/dist/
+
 # Node dependencies
 node_modules/
 
