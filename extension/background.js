@@ -517,7 +517,6 @@ function compareVersions(v1, v2) {
 function notifyUpdate(version, downloadUrl) {
   chrome.notifications.create({
     type: "basic",
-    iconUrl: "shield-icon-128.png",
     title: "PalsPlan Web Protector Update Available",
     message: `Version ${version} is available. Click to download.`,
     priority: 2,
@@ -735,7 +734,6 @@ chrome.management.onDisabled.addListener((info) => {
     // Note: Service worker will be terminated, so this may not always work
     chrome.notifications.create({
       type: "basic",
-      iconUrl: "shield-icon-128.png",
       title: "PalsPlan Web Protector Disabled",
       message: "Warning: Web protection has been disabled. Your browsing is no longer protected.",
       priority: 2,
