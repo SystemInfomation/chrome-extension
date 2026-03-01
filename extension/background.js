@@ -960,6 +960,7 @@ async function performUpdateCheck() {
 /**
  * Sets up the periodic update check using setInterval.
  * Uses setInterval instead of chrome.alarms to support sub-minute intervals.
+ * Also creates a fallback alarm to recover checks after service worker restarts.
  */
 function setupUpdateInterval() {
   // Clear any existing interval to avoid duplicates
@@ -969,13 +970,23 @@ function setupUpdateInterval() {
   globalThis._updateIntervalId = setInterval(() => {
     performUpdateCheck();
   }, UPDATE_CHECK_INTERVAL_SECONDS * 1000);
+
+  // Fallback alarm (minimum 1 min) to restart interval after service worker wakes
+  chrome.alarms.create("updateCheck", {
+    delayInMinutes: 1,
+    periodInMinutes: 1
+  });
 }
 
 /**
- * Handles alarm events for periodic checks (non-update alarms).
+ * Handles alarm events — restarts the setInterval after service worker wake.
  */
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "updateCheck") {
+    // Re-establish the setInterval if it was lost during SW sleep
+    if (!globalThis._updateIntervalId) {
+      setupUpdateInterval();
+    }
     performUpdateCheck();
   }
 });
