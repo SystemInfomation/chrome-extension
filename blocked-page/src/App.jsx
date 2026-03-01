@@ -64,9 +64,7 @@ export default function App() {
   const [pathValue, setPathValue] = useState("/");
   const [category, setCategory] = useState("");
   const [ipValue, setIpValue] = useState(DEFAULT_IP_PLACEHOLDER);
-  const [modalOpen, setModalOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
-  const [bypassCode, setBypassCode] = useState("");
 
   const showToast = useCallback((message, type) => {
     const id = Date.now();
@@ -120,55 +118,6 @@ export default function App() {
     }
   }, [blockedUrl, showToast]);
 
-  const handleUnlock = useCallback(() => {
-    const code = bypassCode.trim();
-    if (!code) {
-      showToast("Please enter a bypass code", "error");
-      return;
-    }
-
-    showToast("Bypass code accepted! Redirecting\u2026", "success");
-
-    let validTarget = false;
-    try {
-      const u = new URL(blockedUrl);
-      if (u.protocol === "http:" || u.protocol === "https:") {
-        validTarget = true;
-      }
-    } catch {
-      /* invalid URL */
-    }
-
-    if (!validTarget) {
-      showToast("No valid URL to redirect to", "error");
-      return;
-    }
-
-    setTimeout(() => {
-      window.location.href = blockedUrl;
-    }, 1500);
-  }, [blockedUrl, bypassCode, showToast]);
-
-  const handleBypassKeyDown = useCallback(
-    (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        handleUnlock();
-      }
-    },
-    [handleUnlock]
-  );
-
-  useEffect(() => {
-    const handleEscape = (e) => {
-      if (e.key === "Escape" && modalOpen) {
-        setModalOpen(false);
-      }
-    };
-    document.addEventListener("keydown", handleEscape);
-    return () => document.removeEventListener("keydown", handleEscape);
-  }, [modalOpen]);
-
   return (
     <div className="page">
       <div className="card">
@@ -202,94 +151,10 @@ export default function App() {
             onCopyUrl={handleCopyUrl}
           />
 
-          {/* ── Report helper text ── */}
-          <p className="helper-text">
-            If you believe this site has been incorrectly blocked, you can{" "}
-            <button
-              type="button"
-              className="report-link"
-              onClick={() => setModalOpen(true)}
-            >
-              report it to your administrator
-            </button>
-            .
-          </p>
-
-          {/* ── Bypass code section ── */}
-          <div className="bypass-box">
-            <label htmlFor="bypassInput" className="bypass-label">
-              Enter your bypass code to unblock this link
-            </label>
-            <div className="bypass-controls">
-              <input
-                id="bypassInput"
-                type="text"
-                placeholder="Bypass code"
-                autoComplete="off"
-                aria-label="Bypass code"
-                className="bypass-input"
-                value={bypassCode}
-                onChange={(e) => setBypassCode(e.target.value)}
-                onKeyDown={handleBypassKeyDown}
-              />
-              <button
-                type="button"
-                className="unlock-btn"
-                onClick={handleUnlock}
-              >
-                Unlock
-              </button>
-            </div>
-          </div>
-
           {/* ── Footer ── */}
           <p className="footer-brand">PalsPlan Web Protector</p>
         </div>
       </div>
-
-      {/* ── Report modal ── */}
-      {modalOpen && (
-        <div
-          className="modal-overlay active"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Report sent confirmation"
-        >
-          <div
-            className="modal-backdrop"
-            onClick={() => setModalOpen(false)}
-          />
-          <div className="modal-dialog">
-            <div className="modal-icon-wrap">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-            </div>
-            <h2 className="modal-title">Report Sent</h2>
-            <p className="modal-text">
-              Report sent to IT (demo). Your administrator will review this
-              request.
-            </p>
-            <button
-              type="button"
-              className="modal-close-btn"
-              onClick={() => setModalOpen(false)}
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* ── Toasts ── */}
       <div className="toast-container" aria-live="polite">
