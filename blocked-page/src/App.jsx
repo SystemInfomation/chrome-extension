@@ -135,9 +135,9 @@ export default function App() {
 
           {/* ── Contact ── */}
           <p className="contact-text">
-            Please contact <strong>CMCB IT Department</strong> via{" "}
+            Please contact <strong>PalsPlan IT Department</strong> via{" "}
             <a href="mailto:Helpdesk@cmc.vic.edu.au" className="email-link">
-              Helpdesk@cmc.vic.edu.au
+              blocked@palsplan.app
             </a>{" "}
             for any additional support.
           </p>
