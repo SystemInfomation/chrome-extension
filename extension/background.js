@@ -35,9 +35,9 @@ const GITHUB_RELEASES_URL = "https://api.github.com/repos/SystemInfomation/cdn-h
 const GITHUB_DOWNLOAD_URL = "https://github.com/SystemInfomation/cdn-hosting/releases/latest/download/palsplan-web-protector.zip";
 
 /**
- * Update check interval in minutes (once per day).
+ * Update check interval in seconds.
  */
-const UPDATE_CHECK_INTERVAL_MINUTES = 24 * 60; // 24 hours
+const UPDATE_CHECK_INTERVAL_SECONDS = 5;
 
 /**
  * Minimum link-shield risk score that triggers a block.
@@ -958,18 +958,21 @@ async function performUpdateCheck() {
 }
 
 /**
- * Sets up the periodic update check alarm.
+ * Sets up the periodic update check using setInterval.
+ * Uses setInterval instead of chrome.alarms to support sub-minute intervals.
  */
-function setupUpdateAlarm() {
-  // Create an alarm that fires daily
-  chrome.alarms.create("updateCheck", {
-    delayInMinutes: 1, // First check after 1 minute
-    periodInMinutes: UPDATE_CHECK_INTERVAL_MINUTES
-  });
+function setupUpdateInterval() {
+  // Clear any existing interval to avoid duplicates
+  if (globalThis._updateIntervalId) {
+    clearInterval(globalThis._updateIntervalId);
+  }
+  globalThis._updateIntervalId = setInterval(() => {
+    performUpdateCheck();
+  }, UPDATE_CHECK_INTERVAL_SECONDS * 1000);
 }
 
 /**
- * Handles alarm events for periodic update checks.
+ * Handles alarm events for periodic checks (non-update alarms).
  */
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "updateCheck") {
@@ -982,17 +985,17 @@ chrome.alarms.onAlarm.addListener((alarm) => {
  */
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "install") {
-    setupUpdateAlarm();
+    setupUpdateInterval();
     // Perform an immediate check after installation
     performUpdateCheck();
   } else if (details.reason === "update") {
-    setupUpdateAlarm();
+    setupUpdateInterval();
   }
 });
 
-// On service worker startup, ensure the alarm is set
+// On service worker startup, ensure the interval is set
 chrome.runtime.onStartup.addListener(() => {
-  setupUpdateAlarm();
+  setupUpdateInterval();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1103,7 +1106,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 chrome.management.onEnabled.addListener((info) => {
   if (info.id === chrome.runtime.id) {
     // Extension was re-enabled - set up monitoring again
-    setupUpdateAlarm();
+    setupUpdateInterval();
   }
 });
 
