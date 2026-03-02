@@ -222,16 +222,10 @@ const GAMING_REGEX = new RegExp(
 const PERSONAL_REGEX = new RegExp(
   [
     // Major social media platforms
-    "\\bfacebook\\.com\\b",
     "\\bfb\\.com\\b",
     "\\bfbcdn\\b",
-    "\\binstagram\\.com\\b",
     "\\btwitter\\.com\\b",
     "\\btwimg\\b",
-    "\\bx\\.com\\b",
-    "\\btiktok\\.com\\b",
-    "\\bsnapchat\\.com\\b",
-    "\\bpinterest\\.com\\b",
     "\\btumblr\\.com\\b",
     "\\breddit\\.com\\b",
     "\\bredd\\.it\\b",
