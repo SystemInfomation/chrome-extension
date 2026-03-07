@@ -7,6 +7,8 @@
  *  3. Gaming websites (Roblox, Steam, Discord, etc.)
  *  4. Adult/explicit content — detected via keyword/pattern matching on the URL
  *  5. Malicious/suspicious sites — detected via link-shield (offline, heuristic)
+ *  6. Screen capture — blocks getDisplayMedia / screen-sourced getUserMedia
+ *     via the content script; notifications are shown here when blocked.
  *
  * When a URL is blocked the tab is redirected to the hosted blocked page at
  * https://blocked.palsplan.app with the original URL and block reason encoded
@@ -1128,6 +1130,36 @@ chrome.management.onDisabled.addListener((info) => {
       requireInteraction: true
     });
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Screen Capture Protection
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Handles screen-capture-blocked events relayed by the content script.
+ * Shows a Chrome notification whenever a page attempts to use the
+ * Screen Capture API (getDisplayMedia / getUserMedia with a screen source).
+ */
+chrome.runtime.onMessage.addListener((message, sender) => {
+  if (message.type !== "SCREEN_CAPTURE_BLOCKED") return;
+
+  // Only handle messages that originate from our own extension's content scripts.
+  if (!sender || sender.id !== chrome.runtime.id) return;
+
+  let hostname = message.url || "unknown page";
+  try {
+    hostname = new URL(message.url).hostname;
+  } catch (_e) {
+    // fall back to the raw URL string
+  }
+
+  chrome.notifications.create({
+    type: "basic",
+    title: "Screen Capture Blocked",
+    message: `PalsPlan Web Protector blocked a screen recording attempt on ${hostname}.`,
+    priority: 2,
+  });
 });
 
 /**

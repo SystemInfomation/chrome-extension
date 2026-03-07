@@ -2,12 +2,21 @@
   "manifest_version": 3,
   "name": "PalsPlan Web Protector",
   "version": "3.0.0",
-  "description": "Web protection extension that blocks adult content and malicious/suspicious websites.",
+  "description": "Web protection extension that blocks adult content, malicious/suspicious websites, and screen-capture attempts.",
   "incognito": "spanning",
 
   "background": {
     "service_worker": "dist/background.bundle.js"
   },
+
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
 
   "permissions": [
     "webNavigation",
