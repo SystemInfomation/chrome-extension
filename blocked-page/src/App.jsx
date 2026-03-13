@@ -136,7 +136,7 @@ export default function App() {
           {/* ── Contact ── */}
           <p className="contact-text">
             Please contact <strong>PalsPlan IT Department</strong> via{" "}
-            <a href="mailto:Helpdesk@cmc.vic.edu.au" className="email-link">
+            <a href="mailto:blocked@palsplan.app" className="email-link">
               blocked@palsplan.app
             </a>{" "}
             for any additional support.
