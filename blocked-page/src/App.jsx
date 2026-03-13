@@ -50,14 +50,10 @@ function safeDecode(value) {
 
 /**
  * App — root component for the PalsPlan Web Protector blocked page.
+ * Linewize-inspired light theme.
  *
  * Reads query-string parameters injected by the Chrome extension:
  *   ?url=<encoded URL>&category=<encoded category>&ip=<ip>&path=<path>
- *
- * Example:
- *   https://blocked.palsplan.app
- *     ?url=https%3A%2F%2Fexample.com
- *     &category=Adult%20Content
  */
 export default function App() {
   const [blockedUrl, setBlockedUrl] = useState("");
@@ -65,6 +61,7 @@ export default function App() {
   const [category, setCategory] = useState("");
   const [ipValue, setIpValue] = useState(DEFAULT_IP_PLACEHOLDER);
   const [toasts, setToasts] = useState([]);
+  const [showDetails, setShowDetails] = useState(false);
 
   const showToast = useCallback((message, type) => {
     const id = Date.now();
@@ -120,39 +117,119 @@ export default function App() {
 
   return (
     <div className="page">
-      <div className="card">
-        <div className="card-inner">
-          {/* ── Logo ── */}
-          <div className="logo-wrap">
-            <img
-              src="https://blocked.palsplan.app/shield-icon.svg"
-              alt="Organization logo"
-            />
-          </div>
-
-          {/* ── Heading ── */}
-          <h1 className="heading">This webpage is currently blocked.</h1>
-
-          {/* ── Contact ── */}
-          <p className="contact-text">
-            Please contact <strong>PalsPlan IT Department</strong> via{" "}
-            <a href="mailto:blocked@palsplan.app" className="email-link">
-              blocked@palsplan.app
-            </a>{" "}
-            for any additional support.
-          </p>
-
-          {/* ── Info panel ── */}
-          <BlockedInfo
-            blockedUrl={blockedUrl}
-            pathValue={pathValue}
-            category={category}
-            ipValue={ipValue}
-            onCopyUrl={handleCopyUrl}
+      {/* ── Top Navigation Bar ── */}
+      <nav className="navbar">
+        <a href="https://palsplan.app" className="navbar-brand" tabIndex={0} aria-label="PalsPlan Web Protector home">
+          <img
+            src="/secured.png"
+            alt="PalsPlan logo"
+            className="navbar-logo"
           />
+          <div className="navbar-name">
+            PalsPlan
+            <span>Web Protection</span>
+          </div>
+        </a>
+      </nav>
 
-          {/* ── Footer ── */}
-          <p className="footer-brand">PalsPlan Web Protector</p>
+      {/* ── Decorative Background Shapes ── */}
+      <div className="bg-shapes" aria-hidden="true">
+        <div className="shape shape-blue" />
+        <div className="shape shape-gold" />
+        <div className="shape shape-purple" />
+        <div className="shape shape-blue-sm" />
+        <div className="shape shape-pink" />
+      </div>
+
+      {/* ── Main Content ── */}
+      <div className="main-content">
+        <div className="card">
+          <div className="card-inner">
+            {/* ── Blocked Icon ── */}
+            <div className="blocked-icon-wrap">
+              {/* Monitor + document icon */}
+              <svg
+                className="monitor-icon"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 120 96"
+                fill="none"
+                aria-hidden="true"
+              >
+                {/* Monitor frame */}
+                <rect x="8" y="8" width="84" height="60" rx="6" stroke="#9ca3af" strokeWidth="4" fill="#f9fafb"/>
+                {/* Screen */}
+                <rect x="16" y="16" width="68" height="44" rx="2" stroke="#d1d5db" strokeWidth="2" fill="#f3f4f6"/>
+                {/* Document lines on screen */}
+                <line x1="24" y1="28" x2="60" y2="28" stroke="#d1d5db" strokeWidth="3" strokeLinecap="round"/>
+                <line x1="24" y1="36" x2="72" y2="36" stroke="#d1d5db" strokeWidth="3" strokeLinecap="round"/>
+                <line x1="24" y1="44" x2="54" y2="44" stroke="#d1d5db" strokeWidth="3" strokeLinecap="round"/>
+                {/* Stand */}
+                <line x1="50" y1="68" x2="50" y2="80" stroke="#9ca3af" strokeWidth="4" strokeLinecap="round"/>
+                <line x1="34" y1="80" x2="66" y2="80" stroke="#9ca3af" strokeWidth="4" strokeLinecap="round"/>
+                {/* Sparkle dots */}
+                <circle cx="4" cy="28" r="2.5" fill="#d1d5db"/>
+                <circle cx="4" cy="44" r="2.5" fill="#d1d5db"/>
+                <circle cx="98" cy="22" r="2.5" fill="#d1d5db"/>
+                <circle cx="98" cy="50" r="2.5" fill="#d1d5db"/>
+              </svg>
+              {/* Red "no" circle overlay */}
+              <div className="no-sign" aria-hidden="true" />
+            </div>
+
+            {/* ── Heading ── */}
+            <h1 className="heading">Content Blocked</h1>
+
+            {/* ── Subtitle ── */}
+            <p className="subtitle">
+              Access to{" "}
+              {blockedUrl
+                ? <span className="blocked-url-text">{blockedUrl}</span>
+                : "this website"
+              }{" "}
+              has been blocked
+            </p>
+
+            {/* ── Toggle Details Button ── */}
+            <button
+              type="button"
+              className={`see-why-btn${showDetails ? " open" : ""}`}
+              onClick={() => setShowDetails((v) => !v)}
+              aria-expanded={showDetails}
+            >
+              {showDetails ? "Hide details" : "See why it's blocked"}
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+              </svg>
+            </button>
+
+            {/* ── Expandable Info Panel ── */}
+            <div className={`info-expand${showDetails ? " visible" : ""}`}>
+              <BlockedInfo
+                blockedUrl={blockedUrl}
+                pathValue={pathValue}
+                category={category}
+                ipValue={ipValue}
+                onCopyUrl={handleCopyUrl}
+              />
+            </div>
+
+            {/* ── Secured Badge ── */}
+            <div className="secured-badge">
+              <img src="/secured.png" alt="PalsPlan Secured" />
+              Secured by PalsPlan
+            </div>
+
+            {/* ── Contact ── */}
+            <p className="contact-text">
+              Contact <strong>PalsPlan IT</strong> via{" "}
+              <a href="mailto:blocked@palsplan.app" className="email-link">
+                blocked@palsplan.app
+              </a>
+            </p>
+
+            {/* ── Footer ── */}
+            <p className="footer-brand">PalsPlan Web Protector</p>
+          </div>
         </div>
       </div>
 
