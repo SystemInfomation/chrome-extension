@@ -39,7 +39,7 @@ const GITHUB_DOWNLOAD_URL = "https://github.com/SystemInfomation/cdn-hosting/rel
 /**
  * Update check interval in seconds.
  */
-const UPDATE_CHECK_INTERVAL_SECONDS = 5;
+const UPDATE_CHECK_INTERVAL_SECONDS = 86400; // 24 hours
 
 /**
  * Minimum link-shield risk score that triggers a block.
@@ -870,8 +870,9 @@ async function checkForUpdates() {
  * @returns {number} - Returns 1 if v1 > v2, -1 if v1 < v2, 0 if equal
  */
 function compareVersions(v1, v2) {
-  const parts1 = v1.split(".").map(Number);
-  const parts2 = v2.split(".").map(Number);
+  const parsePart = (p) => { const n = parseInt(p, 10); return isNaN(n) ? 0 : n; };
+  const parts1 = v1.split(".").map(parsePart);
+  const parts2 = v2.split(".").map(parsePart);
   
   for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
     const part1 = parts1[i] || 0;
@@ -968,10 +969,10 @@ function setupUpdateInterval() {
     performUpdateCheck();
   }, UPDATE_CHECK_INTERVAL_SECONDS * 1000);
 
-  // Fallback alarm (minimum 1 min) to restart interval after service worker wakes
+  // Fallback alarm to restart interval after service worker wakes
   chrome.alarms.create("updateCheck", {
     delayInMinutes: 1,
-    periodInMinutes: 1
+    periodInMinutes: 1440 // 24 hours
   });
 }
 
