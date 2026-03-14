@@ -1,20 +1,23 @@
 /**
- * PalsPlan Web Protector — background service worker
+ * PalsPlan Web Protector — background service worker (Family-Safe Mode)
  *
- * Intercepts main_frame navigation requests and blocks:
- *  1. HTTP (insecure) connections
- *  2. Localhost and loopback addresses
- *  3. Gaming websites (Roblox, Steam, Discord, etc.)
- *  4. Adult/explicit content — detected via keyword/pattern matching on the URL
- *  5. Malicious/suspicious sites — detected via link-shield (offline, heuristic)
- *  6. Screen capture — blocks getDisplayMedia / screen-sourced getUserMedia
+ * Family-safe filtering: allows all general browsing, video games, streaming,
+ * social media, etc. Only blocks:
+ *  1. Adult / explicit content — keyword/pattern matching on the URL
+ *  2. Domains in external blocklists (RPiList porn + AdGuard Spyware filter)
+ *  3. Known malicious / unsafe site patterns
+ *  4. Malicious/suspicious sites — link-shield offline heuristics
+ *  5. HTTP (insecure) connections
+ *  6. Localhost / loopback addresses
+ *  7. Screen capture — blocks getDisplayMedia / screen-sourced getUserMedia
  *     via the content script; notifications are shown here when blocked.
+ *
+ * External blocklists are fetched on install and refreshed every 6 hours so
+ * newly-added domains are picked up quickly.
  *
  * When a URL is blocked the tab is redirected to the hosted blocked page at
  * https://blocked.palsplan.app with the original URL and block reason encoded
  * as query-string parameters.
- *
- * No external API calls are made during detection — everything is offline.
  *
  * This extension works as a normal Chrome extension and does not require
  * enterprise policy or force-installation.
@@ -40,6 +43,29 @@ const GITHUB_DOWNLOAD_URL = "https://github.com/SystemInfomation/cdn-hosting/rel
  * Update check interval in seconds.
  */
 const UPDATE_CHECK_INTERVAL_SECONDS = 86400; // 24 hours
+
+/**
+ * External blocklist sources for the family-safe filter.
+ * These are fetched periodically and merged into BLOCKLIST_DOMAINS.
+ */
+const BLOCKLIST_SOURCES = [
+  // RPiList adult/porn domain blocklist (hosts format)
+  "https://raw.githubusercontent.com/RPiList/specials/master/Blocklisten/pornblock1",
+  // AdGuard Spyware-filter — specific spyware/malware domains (AdBlock syntax)
+  "https://raw.githubusercontent.com/AdguardTeam/AdguardFilters/master/SpywareFilter/sections/specific.txt",
+];
+
+/**
+ * How often (seconds) to re-fetch and merge external blocklists.
+ * 6 hours keeps the list current for newly-added domains.
+ */
+const BLOCKLIST_REFRESH_INTERVAL_SECONDS = 21600; // 6 hours
+
+/**
+ * In-memory set of blocked domains populated from BLOCKLIST_SOURCES.
+ * Loaded from chrome.storage.local on startup; rebuilt on each refresh.
+ */
+const BLOCKLIST_DOMAINS = new Set();
 
 /**
  * Minimum link-shield risk score that triggers a block.
@@ -168,448 +194,28 @@ const ADULT_REGEX = new RegExp(
 );
 
 /**
- * Gaming websites keywords checked against the full lower-cased URL.
- * Blocks access to gaming platforms, browser games, and related sites.
- */
-const GAMING_REGEX = new RegExp(
-  [
-    // Major gaming platforms
-    "\\broblox\\.com\\b",
-    "\\bminecraft\\.net\\b",
-    "\\bfortnite\\.com\\b",
-    "\\bsteampowered\\.com\\b",
-    "\\bsteamcommunity\\.com\\b",
-    "\\bepicgames\\.com\\b",
-    "\\borigin\\.com\\b",
-    "\\bbattle\\.net\\b",
-    "\\bblizzard\\.com\\b",
-    "\\btwitch\\.tv\\b",
-    "\\bdiscord\\.com\\b",
-    "\\bdiscord\\.gg\\b",
-    "\\briotgames\\.com\\b",
-    "\\bleagueoflegends\\.com\\b",
-    "\\bvalorant\\.com\\b",
-    "\\bubisoft\\.com\\b",
-    "\\bea\\.com\\b",
-    "\\bxbox\\.com\\b",
-    "\\bplaystation\\.com\\b",
-    "\\bnintendo\\.com\\b",
-    "\\bgog\\.com\\b",
-    "\\bitch\\.io\\b",
-    "\\brockstargames\\.com\\b",
-    "\\bactivision\\.com\\b",
-    "\\bcallofduty\\.com\\b",
-    "\\bpubg\\.com\\b",
-    "\\bapexlegends\\.com\\b",
-    // Browser and casual games
-    "\\bpoki\\.com\\b",
-    "\\bkizi\\.com\\b",
-    "\\bfriv\\.com\\b",
-    "\\bminiclip\\.com\\b",
-    "\\baddictinggames\\.com\\b",
-    "\\bkongregate\\.com\\b",
-    "\\barmorgames\\.com\\b",
-    "\\bnewgrounds\\.com\\b",
-    "\\bcrazygames\\.com\\b",
-    "\\bgameforge\\.com\\b",
-    "\\by8\\.com\\b",
-  ].join("|"),
-  "i"
-);
-
-/**
- * Personal/social websites keywords checked against the full lower-cased URL.
- * Blocks access to social media, messaging, blogs, and personal sites.
- */
-const PERSONAL_REGEX = new RegExp(
-  [
-    // Major social media platforms
-    "\\bfb\\.com\\b",
-    "\\bfbcdn\\b",
-    "\\btwitter\\.com\\b",
-    "\\btwimg\\b",
-    "\\btumblr\\.com\\b",
-    "\\breddit\\.com\\b",
-    "\\bredd\\.it\\b",
-    "\\bredditstatic\\.com\\b",
-    "\\blinkedin\\.com\\b",
-    "\\bweibo\\.com\\b",
-    "\\bvk\\.com\\b",
-    "\\bthreads\\.net\\b",
-    "\\bmastodon\\.social\\b",
-    "\\bmastodon\\.online\\b",
-    "\\bbereal\\.com\\b",
-    "\\blemon8-app\\.com\\b",
-    "\\btruth social\\b",
-    "\\btruthsocial\\.com\\b",
-    "\\bparler\\.com\\b",
-    "\\bgab\\.com\\b",
-    "\\bgettr\\.com\\b",
-    "\\bclubhouse\\.com\\b",
-    "\\bmewe\\.com\\b",
-    "\\bmyspace\\.com\\b",
-    "\\bask\\.fm\\b",
-    "\\bcuriouscat\\.me\\b",
-    "\\bquora\\.com\\b",
-    // Messaging platforms
-    "\\bwhatsapp\\.com\\b",
-    "\\btelegram\\.org\\b",
-    "\\btelegram\\.me\\b",
-    "\\bviber\\.com\\b",
-    "\\bsignal\\.org\\b",
-    "\\bwechat\\.com\\b",
-    "\\bweixin\\.qq\\.com\\b",
-    "\\bline\\.me\\b",
-    "\\bkik\\.com\\b",
-    "\\bwickr\\.com\\b",
-    "\\belement\\.io\\b",
-    "\\bslack\\.com\\b",
-    // Blogging and personal website platforms
-    "\\bblogger\\.com\\b",
-    "\\bblogspot\\.com\\b",
-    "\\bmedium\\.com\\b",
-    "\\bsubstack\\.com\\b",
-    "\\bwix\\.com\\b",
-    "\\bsquarespace\\.com\\b",
-    "\\bweebly\\.com\\b",
-    "\\bwordpress\\.com\\b",
-    "\\blivejournal\\.com\\b",
-    "\\bdeviantart\\.com\\b",
-    // Forums and communities
-    "\\b4chan\\.org\\b",
-    "\\b8chan\\b",
-    "\\b8kun\\b",
-    "\\bvoat\\b",
-    "\\bimgur\\.com\\b",
-    "\\b9gag\\.com\\b",
-    "\\bifunny\\.co\\b",
-    "\\bfunnyjunk\\.com\\b",
-  ].join("|"),
-  "i"
-);
-
-/**
- * Video streaming and entertainment sites.
- * Blocks access to streaming platforms that waste productivity.
- */
-const STREAMING_REGEX = new RegExp(
-  [
-    // Video streaming
-    "\\byoutube\\.com\\b",
-    "\\byoutu\\.be\\b",
-    "\\bvimeo\\.com\\b",
-    "\\bdailymotion\\.com\\b",
-    "\\bnetflix\\.com\\b",
-    "\\bhulu\\.com\\b",
-    "\\bdisneyplus\\.com\\b",
-    "\\bhbomax\\.com\\b",
-    "\\bmax\\.com\\b",
-    "\\bparamountplus\\.com\\b",
-    "\\bpeacocktv\\.com\\b",
-    "\\bcrunchyroll\\.com\\b",
-    "\\bfunimation\\.com\\b",
-    "\\bpluto\\.tv\\b",
-    "\\btubi\\.tv\\b",
-    "\\bprimevideo\\.com\\b",
-    "\\bappletv\\.com\\b",
-    "\\broku\\.com\\b",
-    "\\bsling\\.com\\b",
-    "\\bfubo\\.tv\\b",
-    "\\bphilo\\.com\\b",
-    "\\bespn\\.com\\b",
-    "\\bdazn\\.com\\b",
-    "\\bbitchute\\.com\\b",
-    "\\brumble\\.com\\b",
-    "\\bodysee\\.com\\b",
-    // Music streaming
-    "\\bsoundcloud\\.com\\b",
-    "\\bpandora\\.com\\b",
-    "\\bdeezer\\.com\\b",
-    "\\btidal\\.com\\b",
-    "\\blast\\.fm\\b",
-    "\\bbandcamp\\.com\\b",
-    // Podcast platforms
-    "\\bpodbean\\.com\\b",
-    "\\bstitcher\\.com\\b",
-    "\\bovercast\\.fm\\b",
-    "\\banchor\\.fm\\b",
-  ].join("|"),
-  "i"
-);
-
-/**
- * Online shopping sites.
- * Blocks access to e-commerce platforms during work hours.
- */
-const SHOPPING_REGEX = new RegExp(
-  [
-    "\\bamazon\\.com\\b",
-    "\\bamazon\\.co\\b",
-    "\\bebay\\.com\\b",
-    "\\betsy\\.com\\b",
-    "\\bwalmart\\.com\\b",
-    "\\btarget\\.com\\b",
-    "\\bbestbuy\\.com\\b",
-    "\\baliexpress\\.com\\b",
-    "\\bwish\\.com\\b",
-    "\\bshein\\.com\\b",
-    "\\btemu\\.com\\b",
-    "\\bwayfair\\.com\\b",
-    "\\boverstock\\.com\\b",
-    "\\bnewegg\\.com\\b",
-    "\\bdhgate\\.com\\b",
-    "\\bbanggood\\.com\\b",
-    "\\bgearbest\\.com\\b",
-    "\\bzappos\\.com\\b",
-    "\\basos\\.com\\b",
-    "\\bzara\\.com\\b",
-    "\\bhm\\.com\\b",
-    "\\bnordstrom\\.com\\b",
-    "\\bmacys\\.com\\b",
-    "\\bcostco\\.com\\b",
-    "\\bhomedepot\\.com\\b",
-    "\\blowes\\.com\\b",
-    "\\bikea\\.com\\b",
-    "\\bposhmark\\.com\\b",
-    "\\bmercari\\.com\\b",
-    "\\bofferup\\.com\\b",
-    "\\bcraigslist\\.org\\b",
-    "\\bfacebookmarketplace\\b",
-    "\\bgroupon\\.com\\b",
-    "\\bslickdeals\\.net\\b",
-    "\\bdealnews\\.com\\b",
-    "\\bretailmenot\\.com\\b",
-    "\\bhoney\\.com\\b",
-  ].join("|"),
-  "i"
-);
-
-/**
- * Gambling and betting sites.
- * Blocks access to gambling platforms, sports betting, and lottery sites.
- */
-const GAMBLING_REGEX = new RegExp(
-  [
-    "\\bbet365\\.com\\b",
-    "\\bdraftkings\\.com\\b",
-    "\\bfanduel\\.com\\b",
-    "\\bbetmgm\\.com\\b",
-    "\\bcaesars\\.com\\b",
-    "\\bpointsbet\\.com\\b",
-    "\\bbovada\\.lv\\b",
-    "\\bbetonline\\.ag\\b",
-    "\\b888casino\\.com\\b",
-    "\\b888poker\\.com\\b",
-    "\\bpokerstars\\.com\\b",
-    "\\bpartypoker\\.com\\b",
-    "\\bwilliamhill\\.com\\b",
-    "\\bbetfair\\.com\\b",
-    "\\bpaddy ?power\\b",
-    "\\bbwin\\.com\\b",
-    "\\bunibet\\.com\\b",
-    "\\bbetway\\.com\\b",
-    "\\b1xbet\\.com\\b",
-    "\\b22bet\\.com\\b",
-    "\\bstake\\.com\\b",
-    "\\bcasinoguru\\b",
-    "\\bonlinecasino\\b",
-    "\\bslotmachine\\b",
-    "\\bjackpotcity\\.com\\b",
-    "\\bspinpalace\\.com\\b",
-    "\\broyal ?vegas\\b",
-    "\\bcasino\\.com\\b",
-    "\\bpoker\\.com\\b",
-    "\\bbingo\\.com\\b",
-    "\\blottery\\b",
-    "\\bgambling\\b",
-    "\\bsportsbook\\b",
-    "\\bbetting\\b",
-    "\\bfanatics\\.com\\/sportsbook\\b",
-    "\\bhard ?rock ?bet\\b",
-  ].join("|"),
-  "i"
-);
-
-/**
- * Dating platforms.
- * Blocks access to dating and matchmaking websites.
- */
-const DATING_REGEX = new RegExp(
-  [
-    "\\btinder\\.com\\b",
-    "\\bbumble\\.com\\b",
-    "\\bmatch\\.com\\b",
-    "\\bokcupid\\.com\\b",
-    "\\bplentyoffish\\.com\\b",
-    "\\bpof\\.com\\b",
-    "\\bhinge\\.co\\b",
-    "\\bcoffee ?meets ?bagel\\b",
-    "\\bgrindr\\.com\\b",
-    "\\bher\\.com\\b",
-    "\\beharmony\\.com\\b",
-    "\\bzoosk\\.com\\b",
-    "\\belitesingles\\.com\\b",
-    "\\bsilversingles\\.com\\b",
-    "\\bourtime\\.com\\b",
-    "\\bchristianmingle\\.com\\b",
-    "\\bjdate\\.com\\b",
-    "\\bbadoo\\.com\\b",
-    "\\bskout\\.com\\b",
-    "\\btagged\\.com\\b",
-    "\\bhappn\\.com\\b",
-    "\\blovoo\\.com\\b",
-    "\\bmeetic\\.com\\b",
-    "\\bsugarbook\\b",
-    "\\bseeking\\.com\\b",
-    "\\bashleymadison\\.com\\b",
-  ].join("|"),
-  "i"
-);
-
-/**
- * VPN/proxy/circumvention tools.
- * Blocks access to services designed to bypass content filters.
- */
-const VPNPROXY_REGEX = new RegExp(
-  [
-    // VPN providers
-    "\\bnordvpn\\.com\\b",
-    "\\bexpressvpn\\.com\\b",
-    "\\bsurfshark\\.com\\b",
-    "\\bcyberghostvpn\\.com\\b",
-    "\\bprivateinternetaccess\\.com\\b",
-    "\\bprotonvpn\\.com\\b",
-    "\\bipvanish\\.com\\b",
-    "\\bwindscribe\\.com\\b",
-    "\\bmullvad\\.net\\b",
-    "\\bhotspotshield\\.com\\b",
-    "\\btunnelbear\\.com\\b",
-    "\\bhide\\.me\\b",
-    "\\bpurevpn\\.com\\b",
-    "\\bvypr vpn\\b",
-    "\\bvyprvpn\\.com\\b",
-    "\\batlasvpn\\.com\\b",
-    "\\bzenmate\\.com\\b",
-    // Proxy and anonymization services
-    "\\bhidemyass\\.com\\b",
-    "\\bkproxy\\.com\\b",
-    "\\bproxysite\\.com\\b",
-    "\\bunblocksite\\b",
-    "\\bfreeproxy\\b",
-    "\\bwebproxy\\b",
-    "\\banonymouse\\.org\\b",
-    "\\bhideipvpn\\.com\\b",
-    "\\btorproject\\.org\\b",
-    "\\btorbrowser\\b",
-    "\\bpsiphon\\b",
-    "\\blantern\\.io\\b",
-    "\\bultrasurf\\b",
-    "\\bfreegate\\b",
-    "\\bhotspot ?shield\\b",
-    // DNS bypass tools
-    "\\bnextdns\\.io\\b",
-    "\\bcloudflare-dns\\.com\\b",
-    "\\bdns-over-https\\b",
-  ].join("|"),
-  "i"
-);
-
-/**
- * Known malicious, phishing, and unsafe sites by pattern.
- * Also blocks URL shorteners (often used to disguise malicious links) and
- * risky file-sharing services.
+ * Known malicious site patterns checked against the full lower-cased URL.
+ * Focused on clearly harmful content; broad keywords removed to avoid
+ * false positives on legitimate family-safe sites.
  */
 const UNSAFE_REGEX = new RegExp(
   [
-    // URL shorteners (commonly used to hide malicious links)
-    "\\bbit\\.ly\\b",
-    "\\btinyurl\\.com\\b",
-    "\\bgoo\\.gl\\b",
-    "\\bt\\.co\\b",
-    "\\brebrand\\.ly\\b",
-    "\\bshorturl\\.at\\b",
-    "\\bow\\.ly\\b",
-    "\\bis\\.gd\\b",
-    "\\bv\\.gd\\b",
-    "\\bcutt\\.ly\\b",
-    "\\badf\\.ly\\b",
-    "\\bbit\\.do\\b",
-    "\\bclck\\.ru\\b",
-    // Risky file-sharing / piracy / warez
-    "\\bthepiratebay\\b",
-    "\\b1337x\\.to\\b",
-    "\\brarbg\\b",
-    "\\bkickass ?torrent\\b",
-    "\\byts\\.mx\\b",
-    "\\bnyaa\\.si\\b",
-    "\\blimetorrent\\b",
-    "\\btorrentz2\\b",
-    "\\bzippyshare\\.com\\b",
-    "\\bmediafire\\.com\\b",
-    "\\bmega\\.nz\\b",
-    "\\banonfiles\\.com\\b",
-    "\\bgofile\\.io\\b",
-    "\\bfiledropper\\.com\\b",
-    "\\buploadhaven\\.com\\b",
-    "\\brapidgator\\.net\\b",
-    "\\bnitroflare\\.com\\b",
-    "\\bturbobit\\.net\\b",
-    "\\buploaded\\.net\\b",
-    // Known phishing/scam patterns
-    "\\bphish\\b",
-    "\\bscam\\b",
-    "\\bfraud\\b",
+    // Known exploit/phishing keywords that appear only in malicious domains
+    "\\bphishing\\b",
     "\\bmalware\\b",
     "\\bransomware\\b",
     "\\bkeylogger\\b",
-    "\\btrojan\\b",
-    "\\bspyware\\b",
-    // Hacking tools and forums
-    "\\bhack ?forum\\b",
-    "\\bcrack\\b",
-    "\\bkeygen\\b",
-    "\\bwarez\\b",
+    // Known crack/warez distribution sites
     "\\bnulled\\.to\\b",
     "\\bcracked\\.io\\b",
-    "\\bleaked\\b",
-    // Crypto mining / scam tokens
-    "\\bcoinhive\\b",
+    // Drive-by crypto-mining scripts
+    "\\bcoinhive\\.com\\b",
     "\\bcryptojacking\\b",
-    "\\bminingpool\\b",
   ].join("|"),
   "i"
 );
 
-/**
- * News and gossip entertainment sites.
- * Blocks major news aggregation and gossip sites for workplace productivity.
- */
-const NEWS_GOSSIP_REGEX = new RegExp(
-  [
-    "\\bbuzzfeed\\.com\\b",
-    "\\btmz\\.com\\b",
-    "\\bboredpanda\\.com\\b",
-    "\\bdistractify\\.com\\b",
-    "\\bthechive\\.com\\b",
-    "\\bcracked\\.com\\b",
-    "\\btheonion\\.com\\b",
-    "\\bbabylon ?bee\\b",
-    "\\bviralnova\\.com\\b",
-    "\\bupworthy\\.com\\b",
-    "\\bladbible\\.com\\b",
-    "\\bunilab\\.com\\b",
-    "\\bjunkee\\.com\\b",
-    "\\bperezhilton\\.com\\b",
-    "\\bpopsugar\\.com\\b",
-    "\\bcosmopolitan\\.com\\b",
-    "\\belleonline\\.com\\b",
-    "\\benews\\.com\\b",
-    "\\buscweekly\\.com\\b",
-    "\\bpeoplemagazine\\b",
-    "\\btabloid\\b",
-  ].join("|"),
-  "i"
-);
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -632,6 +238,169 @@ function isWhitelisted(hostname) {
 }
 
 /**
+ * Returns true if hostname (or any parent domain) appears in BLOCKLIST_DOMAINS.
+ * e.g. "sub.bad-site.com" matches "bad-site.com" if that's in the blocklist.
+ *
+ * @param {string} hostname
+ * @returns {boolean}
+ */
+function isBlocklisted(hostname) {
+  if (BLOCKLIST_DOMAINS.has(hostname)) return true;
+  const parts = hostname.split(".");
+  for (let i = 1; i < parts.length - 1; i++) {
+    if (BLOCKLIST_DOMAINS.has(parts.slice(i).join("."))) return true;
+  }
+  return false;
+}
+
+/**
+ * Parse a hosts-format blocklist (RPiList style).
+ * Handles lines like:
+ *   0.0.0.0 bad-domain.com
+ *   127.0.0.1 bad-domain.com
+ *   bad-domain.com          (plain domain, no IP)
+ * Lines starting with '#' are comments and are ignored.
+ *
+ * @param {string} text
+ * @returns {string[]} array of domain strings
+ */
+function parseHostsFormat(text) {
+  const domains = [];
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    // Remove inline comments
+    const noComment = line.split("#")[0].trim();
+    const parts = noComment.split(/\s+/);
+    let domain;
+    if (parts.length >= 2) {
+      // "0.0.0.0 domain" or "127.0.0.1 domain" format
+      const ip = parts[0];
+      if (ip === "0.0.0.0" || ip === "127.0.0.1" || ip === "::1") {
+        domain = parts[1].toLowerCase();
+      }
+    } else if (parts.length === 1) {
+      // Plain domain line
+      domain = parts[0].toLowerCase();
+    }
+    if (domain && domain.includes(".") && !domain.startsWith(".")) {
+      domains.push(domain);
+    }
+  }
+  return domains;
+}
+
+/**
+ * Parse an AdGuard/uBlock-format filter list.
+ * Extracts domain-blocking rules in the form ||domain.com^ (with optional
+ * option suffixes after ^).  Comment lines (! or #) are ignored.
+ *
+ * @param {string} text
+ * @returns {string[]} array of domain strings
+ */
+function parseAdguardFormat(text) {
+  const domains = [];
+  // Matches lines like: ||domain.com^ or ||domain.com^$options
+  const ruleRe = /^\|\|([a-z0-9._-]+)\^/i;
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("!") || line.startsWith("#")) continue;
+    const m = ruleRe.exec(line);
+    if (m) {
+      domains.push(m[1].toLowerCase());
+    }
+  }
+  return domains;
+}
+
+/**
+ * Fetch a single blocklist URL, auto-detect its format, and return parsed domains.
+ *
+ * @param {string} url
+ * @returns {Promise<string[]>}
+ */
+async function fetchBlocklist(url) {
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { "User-Agent": "PalsPlan-Web-Protector" },
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      console.warn(`[PalsPlan] Blocklist fetch failed for ${url}: HTTP ${response.status}`);
+      return [];
+    }
+    const text = await response.text();
+    // Detect format: AdGuard lists use ||domain^ syntax; hosts lists use IP + domain
+    const isAdguard = text.includes("||") && text.includes("^");
+    return isAdguard ? parseAdguardFormat(text) : parseHostsFormat(text);
+  } catch (err) {
+    console.warn(`[PalsPlan] Blocklist fetch error for ${url}:`, err);
+    return [];
+  }
+}
+
+/**
+ * Fetch all BLOCKLIST_SOURCES, merge into BLOCKLIST_DOMAINS, and persist to
+ * chrome.storage.local so the list survives service-worker restarts.
+ */
+async function refreshBlocklists() {
+  console.warn("[PalsPlan] Refreshing family-safe blocklists…");
+  const allDomains = [];
+  for (const src of BLOCKLIST_SOURCES) {
+    const domains = await fetchBlocklist(src);
+    allDomains.push(...domains);
+  }
+
+  // Rebuild the in-memory Set
+  BLOCKLIST_DOMAINS.clear();
+  for (const d of allDomains) {
+    BLOCKLIST_DOMAINS.add(d);
+  }
+
+  // Invalidate the URL decision cache so newly-blocked domains take effect
+  urlDecisionCache.clear();
+
+  const now = Date.now();
+  await chrome.storage.local.set({
+    blocklistDomains: allDomains,
+    blocklistUpdatedAt: now,
+  });
+
+  console.warn(`[PalsPlan] Blocklist updated: ${BLOCKLIST_DOMAINS.size} domains (${new Date(now).toISOString()})`);
+}
+
+/**
+ * Load the previously-cached blocklist from chrome.storage.local into memory.
+ * Called once on service-worker startup so filtering is immediate.
+ */
+async function loadBlocklistFromStorage() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(["blocklistDomains", "blocklistUpdatedAt"], (result) => {
+      const domains = result.blocklistDomains;
+      if (Array.isArray(domains) && domains.length > 0) {
+        BLOCKLIST_DOMAINS.clear();
+        for (const d of domains) BLOCKLIST_DOMAINS.add(d);
+        console.warn(`[PalsPlan] Loaded ${BLOCKLIST_DOMAINS.size} blocklist domains from storage (last updated ${new Date(result.blocklistUpdatedAt || 0).toISOString()})`);
+      }
+      resolve();
+    });
+  });
+}
+
+/**
+ * Set up the periodic blocklist refresh alarm (every 6 hours).
+ */
+function setupBlocklistRefresh() {
+  chrome.alarms.create("blocklistRefresh", {
+    delayInMinutes: 1,
+    periodInMinutes: BLOCKLIST_REFRESH_INTERVAL_SECONDS / 60,
+  });
+}
+
+
+
+/**
  * Evict the oldest entry from urlDecisionCache when it exceeds MAX_CACHE_SIZE.
  */
 function maybePruneCache() {
@@ -645,6 +414,14 @@ function maybePruneCache() {
  * Evaluate a URL against all detection rules and return the block decision.
  * Results are memoised in urlDecisionCache for fast repeat lookups.
  *
+ * Family-safe rules (in order):
+ *  1. Localhost / loopback → block
+ *  2. HTTP (insecure) → block
+ *  3. Adult content keyword/pattern match → block
+ *  4. Blocklist domain match (external RPiList/AdGuard lists) → block
+ *  5. Known malicious patterns → block
+ *  6. link-shield offline heuristics → block if high risk
+ *
  * @param {string} url
  * @returns {{ blocked: boolean, reason: string }}
  */
@@ -656,7 +433,7 @@ function evaluate(url) {
 
   let decision;
 
-  // Extract hostname for localhost check
+  // Extract hostname for checks
   let hostname;
   try {
     hostname = new URL(url).hostname.toLowerCase();
@@ -678,47 +455,19 @@ function evaluate(url) {
   else if (url.startsWith("http://")) {
     decision = { blocked: true, reason: "Insecure Connection (HTTP)" };
   }
-  // 3. Gaming websites check
-  else if (GAMING_REGEX.test(url)) {
-    decision = { blocked: true, reason: "Gaming Website Blocked" };
-  }
-  // 4. Personal/social websites check
-  else if (PERSONAL_REGEX.test(url)) {
-    decision = { blocked: true, reason: "Personal/Social Website Blocked" };
-  }
-  // 5. Adult content check (single compiled regex — very fast)
+  // 3. Adult content check (keyword/pattern match on full URL)
   else if (ADULT_REGEX.test(url)) {
     decision = { blocked: true, reason: "Adult Content" };
   }
-  // 6. Video streaming and entertainment
-  else if (STREAMING_REGEX.test(url)) {
-    decision = { blocked: true, reason: "Streaming/Entertainment Blocked" };
+  // 4. External blocklist domain check (RPiList porn + AdGuard spyware)
+  else if (isBlocklisted(hostname)) {
+    decision = { blocked: true, reason: "Blocked by Family-Safe Filter" };
   }
-  // 7. Online shopping
-  else if (SHOPPING_REGEX.test(url)) {
-    decision = { blocked: true, reason: "Online Shopping Blocked" };
-  }
-  // 8. Gambling and betting
-  else if (GAMBLING_REGEX.test(url)) {
-    decision = { blocked: true, reason: "Gambling/Betting Blocked" };
-  }
-  // 9. Dating platforms
-  else if (DATING_REGEX.test(url)) {
-    decision = { blocked: true, reason: "Dating Platform Blocked" };
-  }
-  // 10. VPN/proxy circumvention tools
-  else if (VPNPROXY_REGEX.test(url)) {
-    decision = { blocked: true, reason: "VPN/Proxy Circumvention Blocked" };
-  }
-  // 11. Known unsafe/malicious patterns
+  // 5. Known malicious patterns
   else if (UNSAFE_REGEX.test(url)) {
-    decision = { blocked: true, reason: "Unsafe/Malicious Content Blocked" };
-  }
-  // 12. News and gossip entertainment
-  else if (NEWS_GOSSIP_REGEX.test(url)) {
-    decision = { blocked: true, reason: "News/Gossip Entertainment Blocked" };
+    decision = { blocked: true, reason: "Malicious Content Blocked" };
   } else {
-    // 13. Malicious / suspicious site check (link-shield offline heuristics)
+    // 6. Malicious / suspicious site check (link-shield offline heuristics)
     try {
       const result = detectSuspiciousLink(url, { threshold: RISK_SCORE_THRESHOLD });
       if (result.suspicious || result.riskScore >= RISK_SCORE_THRESHOLD) {
@@ -760,11 +509,52 @@ function buildBlockedUrl(originalUrl, reason) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Main interception listener
+// Statistics
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Intercepts top-level page navigations using webNavigation API.
+ * Increment the lifetime and today's blocked-navigation counters stored in
+ * chrome.storage.local.  Lightweight — uses a read-modify-write pattern.
+ */
+function incrementBlockedCount() {
+  chrome.storage.local.get(["blockedTotal", "blockedToday", "blockedTodayDate"], (result) => {
+    const today = new Date().toDateString();
+    const wasToday = result.blockedTodayDate === today;
+    chrome.storage.local.set({
+      blockedTotal: (result.blockedTotal || 0) + 1,
+      blockedToday: wasToday ? (result.blockedToday || 0) + 1 : 1,
+      blockedTodayDate: today,
+    });
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Popup message handler
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Responds to GET_STATS messages from the popup with current protection stats.
+ */
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "GET_STATS") {
+    chrome.storage.local.get(
+      ["blockedTotal", "blockedToday", "blockedTodayDate", "blocklistDomains", "blocklistUpdatedAt"],
+      (result) => {
+        const today = new Date().toDateString();
+        sendResponse({
+          blockedTotal: result.blockedTotal || 0,
+          blockedToday: result.blockedTodayDate === today ? (result.blockedToday || 0) : 0,
+          blocklistSize: Array.isArray(result.blocklistDomains) ? result.blocklistDomains.length : 0,
+          blocklistUpdatedAt: result.blocklistUpdatedAt || null,
+          version: chrome.runtime.getManifest().version,
+        });
+      }
+    );
+    return true; // keep the message channel open for async response
+  }
+});
+
+/**
  * When a URL should be blocked, redirects the tab to the blocked page.
  *
  * This approach works for normal Chrome extensions without requiring
@@ -800,6 +590,8 @@ chrome.webNavigation.onBeforeNavigate.addListener(
     // Run detection (cached after first evaluation)
     const decision = evaluate(url);
     if (decision.blocked) {
+      // Track blocked-navigation statistics
+      incrementBlockedCount();
       // Redirect the tab to the blocked page
       chrome.tabs.update(details.tabId, {
         url: buildBlockedUrl(url, decision.reason),
@@ -987,6 +779,9 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     }
     performUpdateCheck();
   }
+  if (alarm.name === "blocklistRefresh") {
+    refreshBlocklists();
+  }
 });
 
 /**
@@ -995,16 +790,22 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "install") {
     setupUpdateInterval();
+    setupBlocklistRefresh();
     // Perform an immediate check after installation
     performUpdateCheck();
+    refreshBlocklists();
   } else if (details.reason === "update") {
     setupUpdateInterval();
+    setupBlocklistRefresh();
+    refreshBlocklists();
   }
 });
 
-// On service worker startup, ensure the interval is set
+// On service worker startup, load cached blocklist and ensure intervals are set
 chrome.runtime.onStartup.addListener(() => {
   setupUpdateInterval();
+  setupBlocklistRefresh();
+  loadBlocklistFromStorage();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1243,3 +1044,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     }
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Service-worker cold-start: load cached blocklist into memory immediately
+// ─────────────────────────────────────────────────────────────────────────────
+loadBlocklistFromStorage();
