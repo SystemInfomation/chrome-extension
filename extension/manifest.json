@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "PalsPlan Web Protector",
+  "name": "Watson Estates",
   "version": "3.7.5",
-  "description": "Web protection extension that blocks adult content, malicious/suspicious websites, and screen-capture attempts.",
+  "description": "Keeping the watson family secured.",
   "incognito": "spanning",
 
   "icons": {
@@ -19,7 +19,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "PalsPlan Web Protector",
+    "default_title": "Watson Estates",
     "default_popup": "popup.html"
   },
 
