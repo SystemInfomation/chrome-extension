@@ -4,16 +4,19 @@
  * Family-safe filtering: allows all general browsing, video games, streaming,
  * social media, etc. Only blocks:
  *  1. Adult / explicit content — keyword/pattern matching on the URL
- *  2. Domains in external blocklists (RPiList porn + AdGuard Spyware filter)
- *  3. Known malicious / unsafe site patterns
- *  4. Malicious/suspicious sites — link-shield offline heuristics
- *  5. HTTP (insecure) connections
- *  6. Localhost / loopback addresses
+ *  2. VPN / proxy services — prevents children bypassing the filter
+ *  3. Malicious TLDs — TLD registries heavily abused for phishing/malware
+ *  4. Domains in the bundled blocklist (RPiList porn + AdGuard Spyware filter)
+ *     — 1.1 M domains pre-compiled into blocklist.gz, loaded at startup
+ *  5. Known malicious / unsafe site patterns
+ *  6. Malicious/suspicious sites — link-shield offline heuristics
  *  7. Screen capture — blocks getDisplayMedia / screen-sourced getUserMedia
  *     via the content script; notifications are shown here when blocked.
  *
- * External blocklists are fetched on install and refreshed every 6 hours so
- * newly-added domains are picked up quickly.
+ * The blocklist is bundled with the extension (no external network requests).
+ * It was compiled from:
+ *   - RPiList/specials pornblock1 (adult/explicit domains)
+ *   - AdGuard SpywareFilter (spyware/malware domains)
  *
  * When a URL is blocked the tab is redirected to the hosted blocked page at
  * https://blocked.palsplan.app with the original URL and block reason encoded
@@ -45,25 +48,8 @@ const GITHUB_DOWNLOAD_URL = "https://github.com/SystemInfomation/cdn-hosting/rel
 const UPDATE_CHECK_INTERVAL_SECONDS = 86400; // 24 hours
 
 /**
- * External blocklist sources for the family-safe filter.
- * These are fetched periodically and merged into BLOCKLIST_DOMAINS.
- */
-const BLOCKLIST_SOURCES = [
-  // RPiList adult/porn domain blocklist (hosts format)
-  "https://raw.githubusercontent.com/RPiList/specials/master/Blocklisten/pornblock1",
-  // AdGuard Spyware-filter — specific spyware/malware domains (AdBlock syntax)
-  "https://raw.githubusercontent.com/AdguardTeam/AdguardFilters/master/SpywareFilter/sections/specific.txt",
-];
-
-/**
- * How often (seconds) to re-fetch and merge external blocklists.
- * 6 hours keeps the list current for newly-added domains.
- */
-const BLOCKLIST_REFRESH_INTERVAL_SECONDS = 21600; // 6 hours
-
-/**
- * In-memory set of blocked domains populated from BLOCKLIST_SOURCES.
- * Loaded from chrome.storage.local on startup; rebuilt on each refresh.
+ * In-memory set of blocked domains loaded from the bundled blocklist.gz.
+ * Contains 1.1 M+ adult, spyware, and malicious domains.
  */
 const BLOCKLIST_DOMAINS = new Set();
 
@@ -189,9 +175,123 @@ const ADULT_REGEX = new RegExp(
     "\\bescort\\b",
     "\\bstripper\\b",
     "\\bcamgirl\\b",
+    "\\bnsfw\\b",
+    "\\bmilf\\b",
+    "\\bpussy\\b",
+    "\\bjizz\\b",
+    "\\bxnxx\\b",
+    "\\bspankbang\\b",
+    "\\bbeeg\\b",
   ].join("|"),
   "i"
 );
+
+/**
+ * Known VPN and web-proxy service domains.
+ * Checked against the request hostname (with parent-domain matching) to
+ * prevent children from downloading or signing up to bypass tools.
+ */
+const VPN_PROXY_DOMAINS = new Set([
+  // ── Major VPN providers ──────────────────────────────────────────────────
+  "nordvpn.com",
+  "expressvpn.com",
+  "purevpn.com",
+  "surfshark.com",
+  "protonvpn.com",
+  "hidemyass.com",
+  "privateinternetaccess.com",
+  "cyberghostvpn.com",
+  "ipvanish.com",
+  "mullvad.net",
+  "torguard.net",
+  "vyprvpn.com",
+  "hotspotshield.com",
+  "windscribe.com",
+  "tunnelbear.com",
+  "zenmate.com",
+  "hide.me",
+  "astrill.com",
+  "ivpn.net",
+  "airvpn.org",
+  "ovpn.com",
+  "azirevpn.com",
+  "vpnsecure.me",
+  "safervpn.com",
+  "goosevpn.com",
+  "perfect-privacy.com",
+  "bolehvpn.net",
+  "cryptostorm.is",
+  "pia.com",
+  "ultrasurf.us",
+  "psiphon.ca",
+  "getlantern.org",
+  // ── Web proxy services ───────────────────────────────────────────────────
+  "croxyproxy.com",
+  "kproxy.com",
+  "proxysite.com",
+  "4everproxy.com",
+  "hidester.com",
+  "whoer.net",
+  "anonymouse.org",
+  "filterbypass.me",
+  "unblockasites.com",
+  "freeproxyserver.net",
+  "webproxy.to",
+  "hidemy.name",
+  "proxyium.com",
+  "youtubeunblocked.live",
+  "unblockyt.net",
+]);
+
+/**
+ * Returns true if the hostname (or any parent) is a known VPN/proxy service.
+ *
+ * @param {string} hostname
+ * @returns {boolean}
+ */
+function isVpnProxy(hostname) {
+  if (VPN_PROXY_DOMAINS.has(hostname)) return true;
+  const parts = hostname.split(".");
+  for (let i = 1; i < parts.length - 1; i++) {
+    if (VPN_PROXY_DOMAINS.has(parts.slice(i).join("."))) return true;
+  }
+  return false;
+}
+
+/**
+ * Top-level domains heavily abused for phishing, malware, and spam.
+ * These TLDs have extremely high abuse rates and virtually no legitimate
+ * consumer use, making them safe to block in a parental-control context.
+ */
+const MALICIOUS_TLDS = new Set([
+  "tk",   // Tokelau — #1 most-abused free TLD
+  "ml",   // Mali — free TLD, very high abuse
+  "ga",   // Gabon — free TLD, very high abuse
+  "cf",   // Central African Republic — free TLD, very high abuse
+  "gq",   // Equatorial Guinea — free TLD, very high abuse
+  "buzz", // Extremely high phishing/spam rate
+  "icu",  // Extremely high phishing/spam rate
+  "cyou", // Very high abuse rate
+  "cfd",  // Very high phishing rate
+  "bond", // Very high abuse rate
+  "sbs",  // High phishing rate
+  "hair", // Very high abuse rate
+  "autos",// Very high abuse rate
+  "boats",// Very high abuse rate
+]);
+
+/**
+ * Returns true if the hostname's TLD is on the malicious-TLD denylist.
+ *
+ * @param {string} hostname
+ * @returns {boolean}
+ */
+function hasMaliciousTld(hostname) {
+  const parts = hostname.split(".");
+  if (parts.length < 2) return false;
+  const tld = parts[parts.length - 1].toLowerCase();
+  return MALICIOUS_TLDS.has(tld);
+}
 
 /**
  * Known malicious site patterns checked against the full lower-cased URL.
@@ -254,151 +354,67 @@ function isBlocklisted(hostname) {
 }
 
 /**
- * Parse a hosts-format blocklist (RPiList style).
- * Handles lines like:
- *   0.0.0.0 bad-domain.com
- *   127.0.0.1 bad-domain.com
- *   bad-domain.com          (plain domain, no IP)
- * Lines starting with '#' are comments and are ignored.
+ * Load the bundled blocklist.gz into BLOCKLIST_DOMAINS.
  *
- * @param {string} text
- * @returns {string[]} array of domain strings
- */
-function parseHostsFormat(text) {
-  const domains = [];
-  for (const rawLine of text.split("\n")) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-    // Remove inline comments
-    const noComment = line.split("#")[0].trim();
-    const parts = noComment.split(/\s+/);
-    let domain;
-    if (parts.length >= 2) {
-      // "0.0.0.0 domain" or "127.0.0.1 domain" format
-      const ip = parts[0];
-      if (ip === "0.0.0.0" || ip === "127.0.0.1" || ip === "::1") {
-        domain = parts[1].toLowerCase();
-      }
-    } else if (parts.length === 1) {
-      // Plain domain line
-      domain = parts[0].toLowerCase();
-    }
-    if (domain && domain.includes(".") && !domain.startsWith(".")) {
-      domains.push(domain);
-    }
-  }
-  return domains;
-}
-
-/**
- * Parse an AdGuard/uBlock-format filter list.
- * Extracts domain-blocking rules in the form ||domain.com^ (with optional
- * option suffixes after ^).  Comment lines (! or #) are ignored.
+ * The file is a gzip-compressed newline-separated list of domains compiled at
+ * build time from:
+ *   - RPiList/specials pornblock1 (~1.1 M adult domains)
+ *   - AdGuard SpywareFilter specific section (~181 spyware domains)
  *
- * @param {string} text
- * @returns {string[]} array of domain strings
+ * Uses the Compression Streams API (Chrome 80+) to decompress in a streaming
+ * fashion so we never hold the full 29 MB plaintext in memory as one string.
  */
-function parseAdguardFormat(text) {
-  const domains = [];
-  // Matches lines like: ||domain.com^ or ||domain.com^$options
-  const ruleRe = /^\|\|([a-z0-9._-]+)\^/i;
-  for (const rawLine of text.split("\n")) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("!") || line.startsWith("#")) continue;
-    const m = ruleRe.exec(line);
-    if (m) {
-      domains.push(m[1].toLowerCase());
-    }
-  }
-  return domains;
-}
-
-/**
- * Fetch a single blocklist URL, auto-detect its format, and return parsed domains.
- *
- * @param {string} url
- * @returns {Promise<string[]>}
- */
-async function fetchBlocklist(url) {
+async function loadLocalBlocklist() {
   try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: { "User-Agent": "PalsPlan-Web-Protector" },
-      cache: "no-store",
-    });
-    if (!response.ok) {
-      console.warn(`[PalsPlan] Blocklist fetch failed for ${url}: HTTP ${response.status}`);
-      return [];
+    const response = await fetch(chrome.runtime.getURL("blocklist.gz"));
+    if (!response.ok || !response.body) {
+      console.error("[PalsPlan] Could not fetch bundled blocklist:", response.status);
+      return;
     }
-    const text = await response.text();
-    // Detect format: AdGuard lists use ||domain^ syntax; hosts lists use IP + domain
-    const isAdguard = text.includes("||") && text.includes("^");
-    return isAdguard ? parseAdguardFormat(text) : parseHostsFormat(text);
-  } catch (err) {
-    console.warn(`[PalsPlan] Blocklist fetch error for ${url}:`, err);
-    return [];
-  }
-}
 
-/**
- * Fetch all BLOCKLIST_SOURCES, merge into BLOCKLIST_DOMAINS, and persist to
- * chrome.storage.local so the list survives service-worker restarts.
- */
-async function refreshBlocklists() {
-  console.warn("[PalsPlan] Refreshing family-safe blocklists…");
-  const allDomains = [];
-  for (const src of BLOCKLIST_SOURCES) {
-    const domains = await fetchBlocklist(src);
-    allDomains.push(...domains);
-  }
+    const ds = new DecompressionStream("gzip");
+    const reader = response.body.pipeThrough(ds).getReader();
+    const decoder = new TextDecoder("utf-8");
+    let remainder = "";
 
-  // Rebuild the in-memory Set
-  BLOCKLIST_DOMAINS.clear();
-  for (const d of allDomains) {
-    BLOCKLIST_DOMAINS.add(d);
-  }
+    BLOCKLIST_DOMAINS.clear();
 
-  // Invalidate the URL decision cache so newly-blocked domains take effect
-  urlDecisionCache.clear();
+    while (true) {
+      const { done, value } = await reader.read();
+      const chunk = done ? "" : decoder.decode(value, { stream: true });
+      const text = remainder + chunk;
+      const lines = text.split("\n");
 
-  const now = Date.now();
-  await chrome.storage.local.set({
-    blocklistDomains: allDomains,
-    blocklistUpdatedAt: now,
-  });
+      // Hold back the last (possibly incomplete) line for the next iteration
+      remainder = done ? "" : (lines.pop() ?? "");
 
-  console.warn(`[PalsPlan] Blocklist updated: ${BLOCKLIST_DOMAINS.size} domains (${new Date(now).toISOString()})`);
-}
-
-/**
- * Load the previously-cached blocklist from chrome.storage.local into memory.
- * Called once on service-worker startup so filtering is immediate.
- */
-async function loadBlocklistFromStorage() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(["blocklistDomains", "blocklistUpdatedAt"], (result) => {
-      const domains = result.blocklistDomains;
-      if (Array.isArray(domains) && domains.length > 0) {
-        BLOCKLIST_DOMAINS.clear();
-        for (const d of domains) BLOCKLIST_DOMAINS.add(d);
-        console.warn(`[PalsPlan] Loaded ${BLOCKLIST_DOMAINS.size} blocklist domains from storage (last updated ${new Date(result.blocklistUpdatedAt || 0).toISOString()})`);
+      for (const line of lines) {
+        const d = line.trim();
+        if (d && d.includes(".")) BLOCKLIST_DOMAINS.add(d);
       }
-      resolve();
+
+      if (done) {
+        if (remainder) {
+          const d = remainder.trim();
+          if (d && d.includes(".")) BLOCKLIST_DOMAINS.add(d);
+        }
+        break;
+      }
+    }
+
+    urlDecisionCache.clear();
+    const size = BLOCKLIST_DOMAINS.size;
+    console.warn(`[PalsPlan] Bundled blocklist loaded: ${size.toLocaleString()} domains`);
+
+    // Store metadata so the popup can display blocklist size and load time
+    await chrome.storage.local.set({
+      blocklistSize: size,
+      blocklistUpdatedAt: Date.now(),
     });
-  });
+  } catch (err) {
+    console.error("[PalsPlan] Failed to load bundled blocklist:", err);
+  }
 }
-
-/**
- * Set up the periodic blocklist refresh alarm (every 6 hours).
- */
-function setupBlocklistRefresh() {
-  chrome.alarms.create("blocklistRefresh", {
-    delayInMinutes: 1,
-    periodInMinutes: BLOCKLIST_REFRESH_INTERVAL_SECONDS / 60,
-  });
-}
-
-
 
 /**
  * Evict the oldest entry from urlDecisionCache when it exceeds MAX_CACHE_SIZE.
@@ -416,11 +432,14 @@ function maybePruneCache() {
  *
  * Family-safe rules (in order):
  *  1. Localhost / loopback → block
- *  2. HTTP (insecure) → block
- *  3. Adult content keyword/pattern match → block
- *  4. Blocklist domain match (external RPiList/AdGuard lists) → block
- *  5. Known malicious patterns → block
- *  6. link-shield offline heuristics → block if high risk
+ *  2. Adult content keyword/pattern match → block
+ *  3. VPN / proxy service domain → block
+ *  4. Malicious TLD → block
+ *  5. Bundled blocklist domain match → block
+ *  6. Known malicious patterns → block
+ *  7. link-shield offline heuristics → block if high risk
+ *
+ * HTTP connections are allowed (not blocked).
  *
  * @param {string} url
  * @returns {{ blocked: boolean, reason: string }}
@@ -451,23 +470,27 @@ function evaluate(url) {
   ) {
     decision = { blocked: true, reason: "Localhost Access Blocked" };
   }
-  // 2. Block all HTTP (insecure) connections
-  else if (url.startsWith("http://")) {
-    decision = { blocked: true, reason: "Insecure Connection (HTTP)" };
-  }
-  // 3. Adult content check (keyword/pattern match on full URL)
+  // 2. Adult content check (keyword/pattern match on full URL)
   else if (ADULT_REGEX.test(url)) {
     decision = { blocked: true, reason: "Adult Content" };
   }
-  // 4. External blocklist domain check (RPiList porn + AdGuard spyware)
+  // 3. VPN / proxy service check (hostname match)
+  else if (isVpnProxy(hostname)) {
+    decision = { blocked: true, reason: "VPN/Proxy Service Blocked" };
+  }
+  // 4. Malicious TLD check
+  else if (hasMaliciousTld(hostname)) {
+    decision = { blocked: true, reason: "Malicious Domain Blocked" };
+  }
+  // 5. External blocklist domain check (RPiList porn + AdGuard spyware)
   else if (isBlocklisted(hostname)) {
     decision = { blocked: true, reason: "Blocked by Family-Safe Filter" };
   }
-  // 5. Known malicious patterns
+  // 6. Known malicious patterns
   else if (UNSAFE_REGEX.test(url)) {
     decision = { blocked: true, reason: "Malicious Content Blocked" };
   } else {
-    // 6. Malicious / suspicious site check (link-shield offline heuristics)
+    // 7. Malicious / suspicious site check (link-shield offline heuristics)
     try {
       const result = detectSuspiciousLink(url, { threshold: RISK_SCORE_THRESHOLD });
       if (result.suspicious || result.riskScore >= RISK_SCORE_THRESHOLD) {
@@ -538,13 +561,13 @@ function incrementBlockedCount() {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "GET_STATS") {
     chrome.storage.local.get(
-      ["blockedTotal", "blockedToday", "blockedTodayDate", "blocklistDomains", "blocklistUpdatedAt"],
+      ["blockedTotal", "blockedToday", "blockedTodayDate", "blocklistSize", "blocklistUpdatedAt"],
       (result) => {
         const today = new Date().toDateString();
         sendResponse({
           blockedTotal: result.blockedTotal || 0,
           blockedToday: result.blockedTodayDate === today ? (result.blockedToday || 0) : 0,
-          blocklistSize: Array.isArray(result.blocklistDomains) ? result.blocklistDomains.length : 0,
+          blocklistSize: result.blocklistSize || BLOCKLIST_DOMAINS.size || 0,
           blocklistUpdatedAt: result.blocklistUpdatedAt || null,
           version: chrome.runtime.getManifest().version,
         });
@@ -557,24 +580,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 /**
  * When a URL should be blocked, redirects the tab to the blocked page.
  *
- * This approach works for normal Chrome extensions without requiring
- * enterprise policy or force-installation.
+ * Single consolidated listener replaces three separate listeners that
+ * previously ran redundant blocking/tracking/cooldown logic independently.
  */
 chrome.webNavigation.onBeforeNavigate.addListener(
   function (details) {
     // Only intercept main frame navigations (not iframes)
-    if (details.frameId !== 0) {
-      return;
-    }
+    if (details.frameId !== 0) return;
 
     const url = details.url;
+    const tabId = details.tabId;
 
     // Ignore non-http(s) schemes (chrome://, chrome-extension://, etc.)
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      return;
-    }
+    if (!url.startsWith("http://") && !url.startsWith("https://")) return;
 
-    // Extract hostname for whitelist check
+    // Extract hostname
     let hostname;
     try {
       hostname = new URL(url).hostname.toLowerCase();
@@ -582,20 +602,28 @@ chrome.webNavigation.onBeforeNavigate.addListener(
       return;
     }
 
-    // Allow whitelisted domains unconditionally
-    if (isWhitelisted(hostname)) {
-      return;
-    }
+    // Never re-process the blocked page itself
+    if (hostname === new URL(BLOCKED_PAGE_BASE).hostname) return;
 
-    // Run detection (cached after first evaluation)
+    // Allow whitelisted domains unconditionally
+    if (isWhitelisted(hostname)) return;
+
+    // Run detection (result is cached after first evaluation)
     const decision = evaluate(url);
     if (decision.blocked) {
-      // Track blocked-navigation statistics
+      // Track this URL so the onCommitted listener can catch back-button bypasses
+      if (!recentlyBlockedUrls.has(tabId)) {
+        recentlyBlockedUrls.set(tabId, new Set());
+      }
+      const blockedSet = recentlyBlockedUrls.get(tabId);
+      blockedSet.add(url);
+      if (blockedSet.size > MAX_BLOCKED_URLS_PER_TAB) {
+        blockedSet.delete(blockedSet.values().next().value);
+      }
+
+      // Track statistics and redirect
       incrementBlockedCount();
-      // Redirect the tab to the blocked page
-      chrome.tabs.update(details.tabId, {
-        url: buildBlockedUrl(url, decision.reason),
-      });
+      chrome.tabs.update(tabId, { url: buildBlockedUrl(url, decision.reason) });
     }
   },
   { url: [{ schemes: ["http", "https"] }] }
@@ -779,9 +807,6 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     }
     performUpdateCheck();
   }
-  if (alarm.name === "blocklistRefresh") {
-    refreshBlocklists();
-  }
 });
 
 /**
@@ -790,22 +815,18 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "install") {
     setupUpdateInterval();
-    setupBlocklistRefresh();
-    // Perform an immediate check after installation
     performUpdateCheck();
-    refreshBlocklists();
+    loadLocalBlocklist();
   } else if (details.reason === "update") {
     setupUpdateInterval();
-    setupBlocklistRefresh();
-    refreshBlocklists();
+    loadLocalBlocklist();
   }
 });
 
-// On service worker startup, load cached blocklist and ensure intervals are set
+// On service worker startup, load the bundled blocklist and restore intervals
 chrome.runtime.onStartup.addListener(() => {
   setupUpdateInterval();
-  setupBlocklistRefresh();
-  loadBlocklistFromStorage();
+  loadLocalBlocklist();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -847,60 +868,6 @@ chrome.webNavigation.onCommitted.addListener((details) => {
     }
   }
 });
-
-/**
- * Track blocked URLs when we redirect to the blocked page.
- * This listener enhances the existing blocking logic to prevent back button bypasses.
- */
-chrome.webNavigation.onBeforeNavigate.addListener(
-  function (details) {
-    // Only intercept main frame navigations
-    if (details.frameId !== 0) return;
-
-    const url = details.url;
-    const tabId = details.tabId;
-
-    // Ignore non-http(s) schemes
-    if (!url.startsWith("http://") && !url.startsWith("https://")) return;
-
-    // Don't re-block the blocked page itself - use proper hostname check
-    try {
-      const urlObj = new URL(url);
-      if (urlObj.hostname === new URL(BLOCKED_PAGE_BASE).hostname) return;
-    } catch (_e) {
-      // If URL parsing fails, continue with blocking logic
-    }
-
-    // Extract hostname for whitelist check
-    let hostname;
-    try {
-      hostname = new URL(url).hostname.toLowerCase();
-    } catch (_e) {
-      return;
-    }
-
-    // Allow whitelisted domains
-    if (isWhitelisted(hostname)) return;
-
-    // Run detection
-    const decision = evaluate(url);
-    if (decision.blocked) {
-      // Track this blocked URL for this tab
-      if (!recentlyBlockedUrls.has(tabId)) {
-        recentlyBlockedUrls.set(tabId, new Set());
-      }
-      const blockedSet = recentlyBlockedUrls.get(tabId);
-      blockedSet.add(url);
-      
-      // Limit the size of tracked URLs
-      if (blockedSet.size > MAX_BLOCKED_URLS_PER_TAB) {
-        const firstUrl = blockedSet.values().next().value;
-        blockedSet.delete(firstUrl);
-      }
-    }
-  },
-  { url: [{ schemes: ["http", "https"] }] }
-);
 
 /**
  * Clean up tracking data when tab is closed.
@@ -963,67 +930,6 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     priority: 2,
   });
 });
-
-/**
- * Detect and prevent attempts to navigate away from the blocked page too quickly.
- * This prevents users from quickly hitting back/forward to bypass the block.
- */
-const blockTimestamps = new Map();
-/**
- * Minimum time (in milliseconds) that must pass between blocking events.
- * Prevents users from rapidly navigating away from blocked pages to bypass protection.
- */
-const RAPID_NAVIGATION_COOLDOWN_MS = 2000; // 2 seconds
-
-chrome.webNavigation.onBeforeNavigate.addListener(
-  function (details) {
-    if (details.frameId !== 0) return;
-    
-    const url = details.url;
-    const tabId = details.tabId;
-    
-    // Check if we're navigating to the blocked page - use proper hostname check
-    try {
-      const urlObj = new URL(url);
-      const blockedPageHost = new URL(BLOCKED_PAGE_BASE).hostname;
-      if (urlObj.hostname === blockedPageHost) {
-        blockTimestamps.set(tabId, Date.now());
-        return;
-      }
-    } catch (_e) {
-      // If URL parsing fails, continue
-    }
-    
-    // If user navigates away from blocked page within cooldown period
-    const lastBlockTime = blockTimestamps.get(tabId);
-    if (lastBlockTime && Date.now() - lastBlockTime < RAPID_NAVIGATION_COOLDOWN_MS) {
-      // Re-evaluate the URL they're trying to visit
-      let hostname;
-      try {
-        hostname = new URL(url).hostname.toLowerCase();
-      } catch (_e) {
-        return;
-      }
-      
-      if (!isWhitelisted(hostname)) {
-        const decision = evaluate(url);
-        if (decision.blocked) {
-          // Block again and reset the timestamp
-          chrome.tabs.update(tabId, {
-            url: buildBlockedUrl(url, decision.reason),
-          });
-          blockTimestamps.set(tabId, Date.now());
-        }
-      }
-    }
-  },
-  { url: [{ schemes: ["http", "https"] }] }
-);
-
-/**
- * Periodic integrity check to ensure the extension is functioning properly.
- * Runs every hour to verify critical components are active.
- */
 chrome.alarms.create("integrityCheck", {
   periodInMinutes: 60
 });
@@ -1046,6 +952,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Service-worker cold-start: load cached blocklist into memory immediately
+// Service-worker cold-start: load the bundled blocklist on every SW startup.
+// This handles mid-session SW restarts where onInstalled/onStartup don't fire.
 // ─────────────────────────────────────────────────────────────────────────────
-loadBlocklistFromStorage();
+loadLocalBlocklist();

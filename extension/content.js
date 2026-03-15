@@ -12,74 +12,22 @@
  * Why the script-injection pattern?
  * Content scripts run in an isolated JavaScript world and cannot override
  * properties on the *page's* navigator.mediaDevices object. Injecting a
- * <script> element causes the override code to execute inside the page's own
- * JavaScript context, giving it the access it needs.
+ * <script src="..."> element (loaded from the extension's own origin) causes
+ * the override code to execute inside the page's own JavaScript context
+ * without triggering inline-script CSP violations.
  */
 (function () {
   "use strict";
 
   // ─── Inject override into the page's JavaScript context ──────────────────
+  // Load from the extension's origin via src (avoids inline-script CSP issues).
 
   const pageScript = document.createElement("script");
-  pageScript.textContent = `(function () {
-  'use strict';
-  var _MSG_TYPE = '__PALSPLAN_SCREEN_CAPTURE_BLOCKED__';
-
-  function rejectCapture(apiName) {
-    window.postMessage({ type: _MSG_TYPE, api: apiName }, '*');
-    return Promise.reject(
-      new DOMException(
-        'Screen capture is blocked by PalsPlan Web Protector.',
-        'NotAllowedError'
-      )
-    );
-  }
-
-  if (navigator.mediaDevices) {
-    // Block getDisplayMedia — the primary screen-recording/sharing API.
-    // Use Object.defineProperty to prevent the page from re-overriding it.
-    if (typeof navigator.mediaDevices.getDisplayMedia === 'function') {
-      Object.defineProperty(navigator.mediaDevices, 'getDisplayMedia', {
-        configurable: false,
-        enumerable: true,
-        writable: false,
-        value: function () {
-          return rejectCapture('getDisplayMedia');
-        },
-      });
-    }
-
-    // Block getUserMedia when called with a screen/window/tab video source.
-    if (typeof navigator.mediaDevices.getUserMedia === 'function') {
-      var _origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(
-        navigator.mediaDevices
-      );
-      Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
-        configurable: false,
-        enumerable: true,
-        writable: false,
-        value: function (constraints) {
-          if (
-            constraints &&
-            constraints.video &&
-            typeof constraints.video === 'object' &&
-            (constraints.video.mediaSource === 'screen' ||
-              constraints.video.mediaSource === 'window' ||
-              constraints.video.mediaSource === 'browser' ||
-              constraints.video.displaySurface !== undefined)
-          ) {
-            return rejectCapture('getUserMedia');
-          }
-          return _origGetUserMedia(constraints);
-        },
-      });
-    }
-  }
-})();`;
+  pageScript.src = chrome.runtime.getURL("page-inject.js");
+  pageScript.onload = function () { this.remove(); };
 
   // Append before any page scripts run so the override is in place first.
   (document.head || document.documentElement).appendChild(pageScript);
-  pageScript.remove();
 
   // ─── Relay blocked-capture events to the background service worker ────────
 
