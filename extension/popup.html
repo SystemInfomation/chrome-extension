@@ -8,7 +8,7 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      width: 340px;
+      width: 300px;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: #f1f5f9;
       color: #0f172a;
@@ -18,33 +18,33 @@
     /* ── Header ── */
     .header {
       background: linear-gradient(135deg, #1e40af 0%, #2563eb 55%, #3b82f6 100%);
-      padding: 16px 18px 14px;
+      padding: 14px 16px 12px;
       display: flex;
       align-items: center;
-      gap: 11px;
+      gap: 10px;
     }
     .header-icon {
-      width: 40px; height: 40px;
-      border-radius: 12px;
+      width: 36px; height: 36px;
+      border-radius: 10px;
       background: rgba(255,255,255,0.18);
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
     }
-    .header-icon svg { width: 20px; height: 20px; }
+    .header-icon svg { width: 18px; height: 18px; }
     .header-body { flex: 1; min-width: 0; }
     .header-title {
-      font-size: 15px; font-weight: 700;
+      font-size: 14px; font-weight: 700;
       color: #fff; letter-spacing: -0.2px;
     }
     .header-sub {
-      font-size: 11.5px; color: rgba(255,255,255,0.72);
+      font-size: 11px; color: rgba(255,255,255,0.72);
       margin-top: 1px;
     }
     .status-pill {
       display: flex; align-items: center; gap: 5px;
       background: rgba(255,255,255,0.16);
       border: 1px solid rgba(255,255,255,0.22);
-      padding: 4px 9px; border-radius: 99px;
+      padding: 3px 8px; border-radius: 99px;
       flex-shrink: 0;
     }
     .status-dot {
@@ -52,91 +52,53 @@
       background: #4ade80;
       animation: blink 2s ease-in-out infinite;
     }
-    .status-text { font-size: 10.5px; font-weight: 600; color: #fff; }
+    .status-text { font-size: 10px; font-weight: 600; color: #fff; }
     @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
 
     /* ── Stats Grid ── */
     .stats {
       display: grid; grid-template-columns: 1fr 1fr;
-      gap: 8px; padding: 12px 14px 0;
+      gap: 8px; padding: 10px 12px 10px;
     }
     .stat {
       background: #fff;
       border: 1px solid #e2e8f0;
-      border-radius: 12px;
-      padding: 12px 13px;
+      border-radius: 10px;
+      padding: 10px 11px;
       transition: box-shadow 0.15s ease;
     }
-    .stat:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.07); }
-    .stat.full { grid-column: 1 / -1; }
+    .stat:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
     .stat-chip {
       display: inline-flex; align-items: center; justify-content: center;
-      width: 28px; height: 28px; border-radius: 8px;
-      margin-bottom: 8px;
+      width: 24px; height: 24px; border-radius: 7px;
+      margin-bottom: 6px;
     }
-    .stat-chip svg { width: 14px; height: 14px; }
+    .stat-chip svg { width: 12px; height: 12px; }
     .chip-red   { background: #fef2f2; }
     .chip-blue  { background: #eff6ff; }
-    .chip-green { background: #f0fdf4; }
     .stat-num {
-      font-size: 26px; font-weight: 700; color: #0f172a;
+      font-size: 22px; font-weight: 700; color: #0f172a;
       line-height: 1; letter-spacing: -0.5px;
     }
     .stat-lbl {
-      font-size: 10.5px; color: #64748b;
+      font-size: 10px; color: #64748b;
       margin-top: 3px; line-height: 1.4;
     }
-
-    /* ── Feature Rows ── */
-    .features {
-      padding: 10px 14px 10px;
-      display: flex; flex-direction: column; gap: 5px;
-    }
-    .feature {
-      display: flex; align-items: center; gap: 9px;
-      background: #fff;
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
-      padding: 8px 11px;
-    }
-    .feat-icon {
-      width: 26px; height: 26px; border-radius: 7px;
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-    }
-    .feat-icon svg { width: 13px; height: 13px; }
-    .fi-green  { background: #f0fdf4; }
-    .fi-red    { background: #fef2f2; }
-    .fi-amber  { background: #fffbeb; }
-    .fi-purple { background: #faf5ff; }
-    .fi-blue   { background: #eff6ff; }
-    .feat-body { flex: 1; min-width: 0; }
-    .feat-title {
-      font-size: 11.5px; font-weight: 600; color: #1e293b;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    .feat-sub { font-size: 10px; color: #94a3b8; margin-top: 1px; }
-    .feat-tag {
-      font-size: 10px; font-weight: 600;
-      padding: 2px 7px; border-radius: 99px; flex-shrink: 0;
-    }
-    .tag-green { background: #dcfce7; color: #16a34a; }
-    .tag-red   { background: #fee2e2; color: #dc2626; }
-    .tag-blue  { background: #dbeafe; color: #1d4ed8; }
-    .tag-amber { background: #fef3c7; color: #d97706; }
 
     /* ── Footer ── */
     .footer {
       border-top: 1px solid #e2e8f0;
-      padding: 8px 16px;
+      padding: 7px 12px;
       display: flex; align-items: center; justify-content: space-between;
     }
-    .footer-link {
-      font-size: 10.5px; color: #94a3b8; text-decoration: none;
-      transition: color 0.15s;
+    .footer-updated {
+      font-size: 10px; color: #94a3b8;
     }
-    .footer-link:hover { color: #2563eb; }
-    .footer-status { font-size: 10px; color: #cbd5e1; }
+    .footer-version {
+      font-size: 10px; font-weight: 600;
+      padding: 2px 7px; border-radius: 99px;
+      background: #dbeafe; color: #1d4ed8;
+    }
   </style>
 </head>
 <body>
@@ -182,101 +144,12 @@
       <div class="stat-num" id="blocked-total">—</div>
       <div class="stat-lbl">Total blocked</div>
     </div>
-    <div class="stat full">
-      <div class="stat-chip chip-green">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.2"
-             stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
-      </div>
-      <div class="stat-num" id="blocklist-size">—</div>
-      <div class="stat-lbl">Domains in family-safe blocklist</div>
-    </div>
-  </div>
-
-  <!-- Feature Rows -->
-  <div class="features">
-    <div class="feature">
-      <div class="feat-icon fi-green">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"
-             stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="20 6 9 17 4 12"/>
-        </svg>
-      </div>
-      <div class="feat-body">
-        <div class="feat-title">Games &amp; Streaming</div>
-        <div class="feat-sub">Roblox, YouTube, Netflix &amp; more</div>
-      </div>
-      <span class="feat-tag tag-green">Allowed</span>
-    </div>
-
-    <div class="feature">
-      <div class="feat-icon fi-red">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5"
-             stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-        </svg>
-      </div>
-      <div class="feat-body">
-        <div class="feat-title">Adult &amp; NSFW Content</div>
-        <div class="feat-sub">Blocked in real-time</div>
-      </div>
-      <span class="feat-tag tag-red">Blocked</span>
-    </div>
-
-    <div class="feature">
-      <div class="feat-icon fi-purple">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#9333ea" stroke-width="2.5"
-             stroke-linecap="round" stroke-linejoin="round">
-          <rect x="2" y="3" width="20" height="14" rx="2"/>
-          <line x1="8" y1="21" x2="16" y2="21"/>
-          <line x1="12" y1="17" x2="12" y2="21"/>
-        </svg>
-      </div>
-      <div class="feat-body">
-        <div class="feat-title">VPN &amp; Proxy Services</div>
-        <div class="feat-sub">Bypass tools blocked</div>
-      </div>
-      <span class="feat-tag tag-red">Blocked</span>
-    </div>
-
-    <div class="feature">
-      <div class="feat-icon fi-blue">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.5"
-             stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
-      </div>
-      <div class="feat-body">
-        <div class="feat-title">Malicious Sites &amp; TLDs</div>
-        <div class="feat-sub">Spyware, malware &amp; phishing domains</div>
-      </div>
-      <span class="feat-tag tag-red">Blocked</span>
-    </div>
-
-    <div class="feature">
-      <div class="feat-icon fi-amber">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2.5"
-             stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="23 4 23 10 17 10"/>
-          <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-        </svg>
-      </div>
-      <div class="feat-body">
-        <div class="feat-title">Blocklist Auto-Updated</div>
-        <div class="feat-sub" id="blocklist-updated">Checking…</div>
-      </div>
-      <span class="feat-tag tag-blue" id="version">v—</span>
-    </div>
   </div>
 
   <!-- Footer -->
   <div class="footer">
-    <a href="https://watson-test-kitchen.vercel.app" target="_blank" class="footer-link">
-      Watson · Family-Safe Mode
-    </a>
-    <span class="footer-status">Protected</span>
+    <span class="footer-updated" id="blocklist-updated">Checking…</span>
+    <span class="footer-version" id="version">v—</span>
   </div>
 
   <script src="popup.js"></script>
