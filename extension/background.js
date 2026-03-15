@@ -6,14 +6,17 @@
  *  1. Adult / explicit content — keyword/pattern matching on the URL
  *  2. VPN / proxy services — prevents children bypassing the filter
  *  3. Malicious TLDs — TLD registries heavily abused for phishing/malware
- *  4. Domains in external blocklists (RPiList porn + AdGuard Spyware filter)
+ *  4. Domains in the bundled blocklist (RPiList porn + AdGuard Spyware filter)
+ *     — 1.1 M domains pre-compiled into blocklist.gz, loaded at startup
  *  5. Known malicious / unsafe site patterns
  *  6. Malicious/suspicious sites — link-shield offline heuristics
  *  7. Screen capture — blocks getDisplayMedia / screen-sourced getUserMedia
  *     via the content script; notifications are shown here when blocked.
  *
- * External blocklists are fetched on install and refreshed every 6 hours so
- * newly-added domains are picked up quickly.
+ * The blocklist is bundled with the extension (no external network requests).
+ * It was compiled from:
+ *   - RPiList/specials pornblock1 (adult/explicit domains)
+ *   - AdGuard SpywareFilter (spyware/malware domains)
  *
  * When a URL is blocked the tab is redirected to the hosted blocked page at
  * https://blocked.palsplan.app with the original URL and block reason encoded
@@ -45,25 +48,8 @@ const GITHUB_DOWNLOAD_URL = "https://github.com/SystemInfomation/cdn-hosting/rel
 const UPDATE_CHECK_INTERVAL_SECONDS = 86400; // 24 hours
 
 /**
- * External blocklist sources for the family-safe filter.
- * These are fetched periodically and merged into BLOCKLIST_DOMAINS.
- */
-const BLOCKLIST_SOURCES = [
-  // RPiList adult/porn domain blocklist (hosts format)
-  "https://raw.githubusercontent.com/RPiList/specials/master/Blocklisten/pornblock1",
-  // AdGuard Spyware-filter — specific spyware/malware domains (AdBlock syntax)
-  "https://raw.githubusercontent.com/AdguardTeam/AdguardFilters/master/SpywareFilter/sections/specific.txt",
-];
-
-/**
- * How often (seconds) to re-fetch and merge external blocklists.
- * 6 hours keeps the list current for newly-added domains.
- */
-const BLOCKLIST_REFRESH_INTERVAL_SECONDS = 21600; // 6 hours
-
-/**
- * In-memory set of blocked domains populated from BLOCKLIST_SOURCES.
- * Loaded from chrome.storage.local on startup; rebuilt on each refresh.
+ * In-memory set of blocked domains loaded from the bundled blocklist.gz.
+ * Contains 1.1 M+ adult, spyware, and malicious domains.
  */
 const BLOCKLIST_DOMAINS = new Set();
 
@@ -238,7 +224,7 @@ const VPN_PROXY_DOMAINS = new Set([
   "pia.com",
   "ultrasurf.us",
   "psiphon.ca",
-  "lanternpowered.org",
+  "getlantern.org",
   // ── Web proxy services ───────────────────────────────────────────────────
   "croxyproxy.com",
   "kproxy.com",
@@ -368,151 +354,67 @@ function isBlocklisted(hostname) {
 }
 
 /**
- * Parse a hosts-format blocklist (RPiList style).
- * Handles lines like:
- *   0.0.0.0 bad-domain.com
- *   127.0.0.1 bad-domain.com
- *   bad-domain.com          (plain domain, no IP)
- * Lines starting with '#' are comments and are ignored.
+ * Load the bundled blocklist.gz into BLOCKLIST_DOMAINS.
  *
- * @param {string} text
- * @returns {string[]} array of domain strings
- */
-function parseHostsFormat(text) {
-  const domains = [];
-  for (const rawLine of text.split("\n")) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-    // Remove inline comments
-    const noComment = line.split("#")[0].trim();
-    const parts = noComment.split(/\s+/);
-    let domain;
-    if (parts.length >= 2) {
-      // "0.0.0.0 domain" or "127.0.0.1 domain" format
-      const ip = parts[0];
-      if (ip === "0.0.0.0" || ip === "127.0.0.1" || ip === "::1") {
-        domain = parts[1].toLowerCase();
-      }
-    } else if (parts.length === 1) {
-      // Plain domain line
-      domain = parts[0].toLowerCase();
-    }
-    if (domain && domain.includes(".") && !domain.startsWith(".")) {
-      domains.push(domain);
-    }
-  }
-  return domains;
-}
-
-/**
- * Parse an AdGuard/uBlock-format filter list.
- * Extracts domain-blocking rules in the form ||domain.com^ (with optional
- * option suffixes after ^).  Comment lines (! or #) are ignored.
+ * The file is a gzip-compressed newline-separated list of domains compiled at
+ * build time from:
+ *   - RPiList/specials pornblock1 (~1.1 M adult domains)
+ *   - AdGuard SpywareFilter specific section (~181 spyware domains)
  *
- * @param {string} text
- * @returns {string[]} array of domain strings
+ * Uses the Compression Streams API (Chrome 80+) to decompress in a streaming
+ * fashion so we never hold the full 29 MB plaintext in memory as one string.
  */
-function parseAdguardFormat(text) {
-  const domains = [];
-  // Matches lines like: ||domain.com^ or ||domain.com^$options
-  const ruleRe = /^\|\|([a-z0-9._-]+)\^/i;
-  for (const rawLine of text.split("\n")) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("!") || line.startsWith("#")) continue;
-    const m = ruleRe.exec(line);
-    if (m) {
-      domains.push(m[1].toLowerCase());
-    }
-  }
-  return domains;
-}
-
-/**
- * Fetch a single blocklist URL, auto-detect its format, and return parsed domains.
- *
- * @param {string} url
- * @returns {Promise<string[]>}
- */
-async function fetchBlocklist(url) {
+async function loadLocalBlocklist() {
   try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: { "User-Agent": "PalsPlan-Web-Protector" },
-      cache: "no-store",
-    });
-    if (!response.ok) {
-      console.warn(`[PalsPlan] Blocklist fetch failed for ${url}: HTTP ${response.status}`);
-      return [];
+    const response = await fetch(chrome.runtime.getURL("blocklist.gz"));
+    if (!response.ok || !response.body) {
+      console.error("[PalsPlan] Could not fetch bundled blocklist:", response.status);
+      return;
     }
-    const text = await response.text();
-    // Detect format: AdGuard lists use ||domain^ syntax; hosts lists use IP + domain
-    const isAdguard = text.includes("||") && text.includes("^");
-    return isAdguard ? parseAdguardFormat(text) : parseHostsFormat(text);
-  } catch (err) {
-    console.warn(`[PalsPlan] Blocklist fetch error for ${url}:`, err);
-    return [];
-  }
-}
 
-/**
- * Fetch all BLOCKLIST_SOURCES, merge into BLOCKLIST_DOMAINS, and persist to
- * chrome.storage.local so the list survives service-worker restarts.
- */
-async function refreshBlocklists() {
-  console.warn("[PalsPlan] Refreshing family-safe blocklists…");
-  const allDomains = [];
-  for (const src of BLOCKLIST_SOURCES) {
-    // Use a loop instead of spread to avoid "Maximum call stack size exceeded"
-    // when the blocklist contains tens-of-thousands of domains.
-    const domains = await fetchBlocklist(src);
-    for (const d of domains) allDomains.push(d);
-  }
+    const ds = new DecompressionStream("gzip");
+    const reader = response.body.pipeThrough(ds).getReader();
+    const decoder = new TextDecoder("utf-8");
+    let remainder = "";
 
-  // Rebuild the in-memory Set
-  BLOCKLIST_DOMAINS.clear();
-  for (const d of allDomains) {
-    BLOCKLIST_DOMAINS.add(d);
-  }
-  urlDecisionCache.clear();
+    BLOCKLIST_DOMAINS.clear();
 
-  const now = Date.now();
-  await chrome.storage.local.set({
-    blocklistDomains: allDomains,
-    blocklistUpdatedAt: now,
-  });
+    while (true) {
+      const { done, value } = await reader.read();
+      const chunk = done ? "" : decoder.decode(value, { stream: true });
+      const text = remainder + chunk;
+      const lines = text.split("\n");
 
-  console.warn(`[PalsPlan] Blocklist updated: ${BLOCKLIST_DOMAINS.size} domains (${new Date(now).toISOString()})`);
-}
+      // Hold back the last (possibly incomplete) line for the next iteration
+      remainder = done ? "" : (lines.pop() ?? "");
 
-/**
- * Load the previously-cached blocklist from chrome.storage.local into memory.
- * Called once on service-worker startup so filtering is immediate.
- */
-async function loadBlocklistFromStorage() {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(["blocklistDomains", "blocklistUpdatedAt"], (result) => {
-      const domains = result.blocklistDomains;
-      if (Array.isArray(domains) && domains.length > 0) {
-        BLOCKLIST_DOMAINS.clear();
-        for (const d of domains) BLOCKLIST_DOMAINS.add(d);
-        console.warn(`[PalsPlan] Loaded ${BLOCKLIST_DOMAINS.size} blocklist domains from storage (last updated ${new Date(result.blocklistUpdatedAt || 0).toISOString()})`);
+      for (const line of lines) {
+        const d = line.trim();
+        if (d && d.includes(".")) BLOCKLIST_DOMAINS.add(d);
       }
-      resolve();
+
+      if (done) {
+        if (remainder) {
+          const d = remainder.trim();
+          if (d && d.includes(".")) BLOCKLIST_DOMAINS.add(d);
+        }
+        break;
+      }
+    }
+
+    urlDecisionCache.clear();
+    const size = BLOCKLIST_DOMAINS.size;
+    console.warn(`[PalsPlan] Bundled blocklist loaded: ${size.toLocaleString()} domains`);
+
+    // Store metadata so the popup can display blocklist size and load time
+    await chrome.storage.local.set({
+      blocklistSize: size,
+      blocklistUpdatedAt: Date.now(),
     });
-  });
+  } catch (err) {
+    console.error("[PalsPlan] Failed to load bundled blocklist:", err);
+  }
 }
-
-/**
- * Set up the periodic blocklist refresh alarm (every 6 hours).
- */
-function setupBlocklistRefresh() {
-  chrome.alarms.create("blocklistRefresh", {
-    delayInMinutes: 1,
-    periodInMinutes: BLOCKLIST_REFRESH_INTERVAL_SECONDS / 60,
-  });
-}
-
-
 
 /**
  * Evict the oldest entry from urlDecisionCache when it exceeds MAX_CACHE_SIZE.
@@ -533,7 +435,7 @@ function maybePruneCache() {
  *  2. Adult content keyword/pattern match → block
  *  3. VPN / proxy service domain → block
  *  4. Malicious TLD → block
- *  5. Blocklist domain match (external RPiList/AdGuard lists) → block
+ *  5. Bundled blocklist domain match → block
  *  6. Known malicious patterns → block
  *  7. link-shield offline heuristics → block if high risk
  *
@@ -659,13 +561,13 @@ function incrementBlockedCount() {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "GET_STATS") {
     chrome.storage.local.get(
-      ["blockedTotal", "blockedToday", "blockedTodayDate", "blocklistDomains", "blocklistUpdatedAt"],
+      ["blockedTotal", "blockedToday", "blockedTodayDate", "blocklistSize", "blocklistUpdatedAt"],
       (result) => {
         const today = new Date().toDateString();
         sendResponse({
           blockedTotal: result.blockedTotal || 0,
           blockedToday: result.blockedTodayDate === today ? (result.blockedToday || 0) : 0,
-          blocklistSize: Array.isArray(result.blocklistDomains) ? result.blocklistDomains.length : 0,
+          blocklistSize: result.blocklistSize || BLOCKLIST_DOMAINS.size || 0,
           blocklistUpdatedAt: result.blocklistUpdatedAt || null,
           version: chrome.runtime.getManifest().version,
         });
@@ -905,9 +807,6 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     }
     performUpdateCheck();
   }
-  if (alarm.name === "blocklistRefresh") {
-    refreshBlocklists();
-  }
 });
 
 /**
@@ -916,22 +815,18 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "install") {
     setupUpdateInterval();
-    setupBlocklistRefresh();
-    // Perform an immediate check after installation
     performUpdateCheck();
-    refreshBlocklists();
+    loadLocalBlocklist();
   } else if (details.reason === "update") {
     setupUpdateInterval();
-    setupBlocklistRefresh();
-    refreshBlocklists();
+    loadLocalBlocklist();
   }
 });
 
-// On service worker startup, load cached blocklist and ensure intervals are set
+// On service worker startup, load the bundled blocklist and restore intervals
 chrome.runtime.onStartup.addListener(() => {
   setupUpdateInterval();
-  setupBlocklistRefresh();
-  loadBlocklistFromStorage();
+  loadLocalBlocklist();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1057,6 +952,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Service-worker cold-start: load cached blocklist into memory immediately
+// Service-worker cold-start: load the bundled blocklist on every SW startup.
+// This handles mid-session SW restarts where onInstalled/onStartup don't fire.
 // ─────────────────────────────────────────────────────────────────────────────
-loadBlocklistFromStorage();
+loadLocalBlocklist();
