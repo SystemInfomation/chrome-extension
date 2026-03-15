@@ -63,7 +63,6 @@
     if (el("version"))         el("version").textContent = "v" + (stats.version || "—");
     if (el("blocked-today"))   el("blocked-today").textContent   = formatNumber(stats.blockedToday || 0);
     if (el("blocked-total"))   el("blocked-total").textContent   = formatNumber(stats.blockedTotal || 0);
-    if (el("blocklist-size"))  el("blocklist-size").textContent  = formatNumber(stats.blocklistSize || 0);
     if (el("blocklist-updated")) {
       el("blocklist-updated").textContent = `Updated ${timeAgo(stats.blocklistUpdatedAt)}`;
     }
@@ -73,7 +72,7 @@
    * Show placeholder dashes while waiting for the background response.
    */
   function renderLoading() {
-    const ids = ["blocked-today", "blocked-total", "blocklist-size"];
+    const ids = ["blocked-today", "blocked-total"];
     for (const id of ids) {
       const el = document.getElementById(id);
       if (el) el.textContent = "—";
