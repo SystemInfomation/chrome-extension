@@ -13,7 +13,7 @@
 (function () {
   "use strict";
 
-  var _MSG_TYPE = "__PALSPLAN_SCREEN_CAPTURE_BLOCKED__";
+  const _MSG_TYPE = "__PALSPLAN_SCREEN_CAPTURE_BLOCKED__";
 
   function rejectCapture(apiName) {
     window.postMessage({ type: _MSG_TYPE, api: apiName }, "*");
@@ -40,7 +40,7 @@
 
     // Block getUserMedia when called with a screen/window/tab video source.
     if (typeof navigator.mediaDevices.getUserMedia === "function") {
-      var _origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(
+      const _origGetUserMedia = navigator.mediaDevices.getUserMedia.bind(
         navigator.mediaDevices
       );
       Object.defineProperty(navigator.mediaDevices, "getUserMedia", {

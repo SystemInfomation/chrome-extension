@@ -4,11 +4,11 @@
  * Family-safe filtering: allows all general browsing, video games, streaming,
  * social media, etc. Only blocks:
  *  1. Adult / explicit content — keyword/pattern matching on the URL
- *  2. Domains in external blocklists (RPiList porn + AdGuard Spyware filter)
- *  3. Known malicious / unsafe site patterns
- *  4. Malicious/suspicious sites — link-shield offline heuristics
- *  5. HTTP (insecure) connections
- *  6. Localhost / loopback addresses
+ *  2. VPN / proxy services — prevents children bypassing the filter
+ *  3. Malicious TLDs — TLD registries heavily abused for phishing/malware
+ *  4. Domains in external blocklists (RPiList porn + AdGuard Spyware filter)
+ *  5. Known malicious / unsafe site patterns
+ *  6. Malicious/suspicious sites — link-shield offline heuristics
  *  7. Screen capture — blocks getDisplayMedia / screen-sourced getUserMedia
  *     via the content script; notifications are shown here when blocked.
  *
@@ -189,9 +189,123 @@ const ADULT_REGEX = new RegExp(
     "\\bescort\\b",
     "\\bstripper\\b",
     "\\bcamgirl\\b",
+    "\\bnsfw\\b",
+    "\\bmilf\\b",
+    "\\bpussy\\b",
+    "\\bjizz\\b",
+    "\\bxnxx\\b",
+    "\\bspankbang\\b",
+    "\\bbeeg\\b",
   ].join("|"),
   "i"
 );
+
+/**
+ * Known VPN and web-proxy service domains.
+ * Checked against the request hostname (with parent-domain matching) to
+ * prevent children from downloading or signing up to bypass tools.
+ */
+const VPN_PROXY_DOMAINS = new Set([
+  // ── Major VPN providers ──────────────────────────────────────────────────
+  "nordvpn.com",
+  "expressvpn.com",
+  "purevpn.com",
+  "surfshark.com",
+  "protonvpn.com",
+  "hidemyass.com",
+  "privateinternetaccess.com",
+  "cyberghostvpn.com",
+  "ipvanish.com",
+  "mullvad.net",
+  "torguard.net",
+  "vyprvpn.com",
+  "hotspotshield.com",
+  "windscribe.com",
+  "tunnelbear.com",
+  "zenmate.com",
+  "hide.me",
+  "astrill.com",
+  "ivpn.net",
+  "airvpn.org",
+  "ovpn.com",
+  "azirevpn.com",
+  "vpnsecure.me",
+  "safervpn.com",
+  "goosevpn.com",
+  "perfect-privacy.com",
+  "bolehvpn.net",
+  "cryptostorm.is",
+  "pia.com",
+  "ultrasurf.us",
+  "psiphon.ca",
+  "lanternpowered.org",
+  // ── Web proxy services ───────────────────────────────────────────────────
+  "croxyproxy.com",
+  "kproxy.com",
+  "proxysite.com",
+  "4everproxy.com",
+  "hidester.com",
+  "whoer.net",
+  "anonymouse.org",
+  "filterbypass.me",
+  "unblockasites.com",
+  "freeproxyserver.net",
+  "webproxy.to",
+  "hidemy.name",
+  "proxyium.com",
+  "youtubeunblocked.live",
+  "unblockyt.net",
+]);
+
+/**
+ * Returns true if the hostname (or any parent) is a known VPN/proxy service.
+ *
+ * @param {string} hostname
+ * @returns {boolean}
+ */
+function isVpnProxy(hostname) {
+  if (VPN_PROXY_DOMAINS.has(hostname)) return true;
+  const parts = hostname.split(".");
+  for (let i = 1; i < parts.length - 1; i++) {
+    if (VPN_PROXY_DOMAINS.has(parts.slice(i).join("."))) return true;
+  }
+  return false;
+}
+
+/**
+ * Top-level domains heavily abused for phishing, malware, and spam.
+ * These TLDs have extremely high abuse rates and virtually no legitimate
+ * consumer use, making them safe to block in a parental-control context.
+ */
+const MALICIOUS_TLDS = new Set([
+  "tk",   // Tokelau — #1 most-abused free TLD
+  "ml",   // Mali — free TLD, very high abuse
+  "ga",   // Gabon — free TLD, very high abuse
+  "cf",   // Central African Republic — free TLD, very high abuse
+  "gq",   // Equatorial Guinea — free TLD, very high abuse
+  "buzz", // Extremely high phishing/spam rate
+  "icu",  // Extremely high phishing/spam rate
+  "cyou", // Very high abuse rate
+  "cfd",  // Very high phishing rate
+  "bond", // Very high abuse rate
+  "sbs",  // High phishing rate
+  "hair", // Very high abuse rate
+  "autos",// Very high abuse rate
+  "boats",// Very high abuse rate
+]);
+
+/**
+ * Returns true if the hostname's TLD is on the malicious-TLD denylist.
+ *
+ * @param {string} hostname
+ * @returns {boolean}
+ */
+function hasMaliciousTld(hostname) {
+  const parts = hostname.split(".");
+  if (parts.length < 2) return false;
+  const tld = parts[parts.length - 1].toLowerCase();
+  return MALICIOUS_TLDS.has(tld);
+}
 
 /**
  * Known malicious site patterns checked against the full lower-cased URL.
@@ -348,8 +462,10 @@ async function refreshBlocklists() {
   console.warn("[PalsPlan] Refreshing family-safe blocklists…");
   const allDomains = [];
   for (const src of BLOCKLIST_SOURCES) {
+    // Use a loop instead of spread to avoid "Maximum call stack size exceeded"
+    // when the blocklist contains tens-of-thousands of domains.
     const domains = await fetchBlocklist(src);
-    allDomains.push(...domains);
+    for (const d of domains) allDomains.push(d);
   }
 
   // Rebuild the in-memory Set
@@ -357,8 +473,6 @@ async function refreshBlocklists() {
   for (const d of allDomains) {
     BLOCKLIST_DOMAINS.add(d);
   }
-
-  // Invalidate the URL decision cache so newly-blocked domains take effect
   urlDecisionCache.clear();
 
   const now = Date.now();
@@ -416,11 +530,14 @@ function maybePruneCache() {
  *
  * Family-safe rules (in order):
  *  1. Localhost / loopback → block
- *  2. HTTP (insecure) → block
- *  3. Adult content keyword/pattern match → block
- *  4. Blocklist domain match (external RPiList/AdGuard lists) → block
- *  5. Known malicious patterns → block
- *  6. link-shield offline heuristics → block if high risk
+ *  2. Adult content keyword/pattern match → block
+ *  3. VPN / proxy service domain → block
+ *  4. Malicious TLD → block
+ *  5. Blocklist domain match (external RPiList/AdGuard lists) → block
+ *  6. Known malicious patterns → block
+ *  7. link-shield offline heuristics → block if high risk
+ *
+ * HTTP connections are allowed (not blocked).
  *
  * @param {string} url
  * @returns {{ blocked: boolean, reason: string }}
@@ -451,23 +568,27 @@ function evaluate(url) {
   ) {
     decision = { blocked: true, reason: "Localhost Access Blocked" };
   }
-  // 2. Block all HTTP (insecure) connections
-  else if (url.startsWith("http://")) {
-    decision = { blocked: true, reason: "Insecure Connection (HTTP)" };
-  }
-  // 3. Adult content check (keyword/pattern match on full URL)
+  // 2. Adult content check (keyword/pattern match on full URL)
   else if (ADULT_REGEX.test(url)) {
     decision = { blocked: true, reason: "Adult Content" };
   }
-  // 4. External blocklist domain check (RPiList porn + AdGuard spyware)
+  // 3. VPN / proxy service check (hostname match)
+  else if (isVpnProxy(hostname)) {
+    decision = { blocked: true, reason: "VPN/Proxy Service Blocked" };
+  }
+  // 4. Malicious TLD check
+  else if (hasMaliciousTld(hostname)) {
+    decision = { blocked: true, reason: "Malicious Domain Blocked" };
+  }
+  // 5. External blocklist domain check (RPiList porn + AdGuard spyware)
   else if (isBlocklisted(hostname)) {
     decision = { blocked: true, reason: "Blocked by Family-Safe Filter" };
   }
-  // 5. Known malicious patterns
+  // 6. Known malicious patterns
   else if (UNSAFE_REGEX.test(url)) {
     decision = { blocked: true, reason: "Malicious Content Blocked" };
   } else {
-    // 6. Malicious / suspicious site check (link-shield offline heuristics)
+    // 7. Malicious / suspicious site check (link-shield offline heuristics)
     try {
       const result = detectSuspiciousLink(url, { threshold: RISK_SCORE_THRESHOLD });
       if (result.suspicious || result.riskScore >= RISK_SCORE_THRESHOLD) {
@@ -557,24 +678,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 /**
  * When a URL should be blocked, redirects the tab to the blocked page.
  *
- * This approach works for normal Chrome extensions without requiring
- * enterprise policy or force-installation.
+ * Single consolidated listener replaces three separate listeners that
+ * previously ran redundant blocking/tracking/cooldown logic independently.
  */
 chrome.webNavigation.onBeforeNavigate.addListener(
   function (details) {
     // Only intercept main frame navigations (not iframes)
-    if (details.frameId !== 0) {
-      return;
-    }
+    if (details.frameId !== 0) return;
 
     const url = details.url;
+    const tabId = details.tabId;
 
     // Ignore non-http(s) schemes (chrome://, chrome-extension://, etc.)
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      return;
-    }
+    if (!url.startsWith("http://") && !url.startsWith("https://")) return;
 
-    // Extract hostname for whitelist check
+    // Extract hostname
     let hostname;
     try {
       hostname = new URL(url).hostname.toLowerCase();
@@ -582,20 +700,28 @@ chrome.webNavigation.onBeforeNavigate.addListener(
       return;
     }
 
-    // Allow whitelisted domains unconditionally
-    if (isWhitelisted(hostname)) {
-      return;
-    }
+    // Never re-process the blocked page itself
+    if (hostname === new URL(BLOCKED_PAGE_BASE).hostname) return;
 
-    // Run detection (cached after first evaluation)
+    // Allow whitelisted domains unconditionally
+    if (isWhitelisted(hostname)) return;
+
+    // Run detection (result is cached after first evaluation)
     const decision = evaluate(url);
     if (decision.blocked) {
-      // Track blocked-navigation statistics
+      // Track this URL so the onCommitted listener can catch back-button bypasses
+      if (!recentlyBlockedUrls.has(tabId)) {
+        recentlyBlockedUrls.set(tabId, new Set());
+      }
+      const blockedSet = recentlyBlockedUrls.get(tabId);
+      blockedSet.add(url);
+      if (blockedSet.size > MAX_BLOCKED_URLS_PER_TAB) {
+        blockedSet.delete(blockedSet.values().next().value);
+      }
+
+      // Track statistics and redirect
       incrementBlockedCount();
-      // Redirect the tab to the blocked page
-      chrome.tabs.update(details.tabId, {
-        url: buildBlockedUrl(url, decision.reason),
-      });
+      chrome.tabs.update(tabId, { url: buildBlockedUrl(url, decision.reason) });
     }
   },
   { url: [{ schemes: ["http", "https"] }] }
@@ -849,60 +975,6 @@ chrome.webNavigation.onCommitted.addListener((details) => {
 });
 
 /**
- * Track blocked URLs when we redirect to the blocked page.
- * This listener enhances the existing blocking logic to prevent back button bypasses.
- */
-chrome.webNavigation.onBeforeNavigate.addListener(
-  function (details) {
-    // Only intercept main frame navigations
-    if (details.frameId !== 0) return;
-
-    const url = details.url;
-    const tabId = details.tabId;
-
-    // Ignore non-http(s) schemes
-    if (!url.startsWith("http://") && !url.startsWith("https://")) return;
-
-    // Don't re-block the blocked page itself - use proper hostname check
-    try {
-      const urlObj = new URL(url);
-      if (urlObj.hostname === new URL(BLOCKED_PAGE_BASE).hostname) return;
-    } catch (_e) {
-      // If URL parsing fails, continue with blocking logic
-    }
-
-    // Extract hostname for whitelist check
-    let hostname;
-    try {
-      hostname = new URL(url).hostname.toLowerCase();
-    } catch (_e) {
-      return;
-    }
-
-    // Allow whitelisted domains
-    if (isWhitelisted(hostname)) return;
-
-    // Run detection
-    const decision = evaluate(url);
-    if (decision.blocked) {
-      // Track this blocked URL for this tab
-      if (!recentlyBlockedUrls.has(tabId)) {
-        recentlyBlockedUrls.set(tabId, new Set());
-      }
-      const blockedSet = recentlyBlockedUrls.get(tabId);
-      blockedSet.add(url);
-      
-      // Limit the size of tracked URLs
-      if (blockedSet.size > MAX_BLOCKED_URLS_PER_TAB) {
-        const firstUrl = blockedSet.values().next().value;
-        blockedSet.delete(firstUrl);
-      }
-    }
-  },
-  { url: [{ schemes: ["http", "https"] }] }
-);
-
-/**
  * Clean up tracking data when tab is closed.
  */
 chrome.tabs.onRemoved.addListener((tabId) => {
@@ -963,67 +1035,6 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     priority: 2,
   });
 });
-
-/**
- * Detect and prevent attempts to navigate away from the blocked page too quickly.
- * This prevents users from quickly hitting back/forward to bypass the block.
- */
-const blockTimestamps = new Map();
-/**
- * Minimum time (in milliseconds) that must pass between blocking events.
- * Prevents users from rapidly navigating away from blocked pages to bypass protection.
- */
-const RAPID_NAVIGATION_COOLDOWN_MS = 2000; // 2 seconds
-
-chrome.webNavigation.onBeforeNavigate.addListener(
-  function (details) {
-    if (details.frameId !== 0) return;
-    
-    const url = details.url;
-    const tabId = details.tabId;
-    
-    // Check if we're navigating to the blocked page - use proper hostname check
-    try {
-      const urlObj = new URL(url);
-      const blockedPageHost = new URL(BLOCKED_PAGE_BASE).hostname;
-      if (urlObj.hostname === blockedPageHost) {
-        blockTimestamps.set(tabId, Date.now());
-        return;
-      }
-    } catch (_e) {
-      // If URL parsing fails, continue
-    }
-    
-    // If user navigates away from blocked page within cooldown period
-    const lastBlockTime = blockTimestamps.get(tabId);
-    if (lastBlockTime && Date.now() - lastBlockTime < RAPID_NAVIGATION_COOLDOWN_MS) {
-      // Re-evaluate the URL they're trying to visit
-      let hostname;
-      try {
-        hostname = new URL(url).hostname.toLowerCase();
-      } catch (_e) {
-        return;
-      }
-      
-      if (!isWhitelisted(hostname)) {
-        const decision = evaluate(url);
-        if (decision.blocked) {
-          // Block again and reset the timestamp
-          chrome.tabs.update(tabId, {
-            url: buildBlockedUrl(url, decision.reason),
-          });
-          blockTimestamps.set(tabId, Date.now());
-        }
-      }
-    }
-  },
-  { url: [{ schemes: ["http", "https"] }] }
-);
-
-/**
- * Periodic integrity check to ensure the extension is functioning properly.
- * Runs every hour to verify critical components are active.
- */
 chrome.alarms.create("integrityCheck", {
   periodInMinutes: 60
 });

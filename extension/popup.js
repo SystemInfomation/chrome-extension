@@ -65,11 +65,7 @@
     if (el("blocked-total"))   el("blocked-total").textContent   = formatNumber(stats.blockedTotal || 0);
     if (el("blocklist-size"))  el("blocklist-size").textContent  = formatNumber(stats.blocklistSize || 0);
     if (el("blocklist-updated")) {
-      const updated = timeAgo(stats.blocklistUpdatedAt);
-      el("blocklist-updated").textContent =
-        stats.blocklistSize > 0
-          ? `${formatNumber(stats.blocklistSize)} domains · Updated ${updated}`
-          : `Updated ${updated}`;
+      el("blocklist-updated").textContent = `Updated ${timeAgo(stats.blocklistUpdatedAt)}`;
     }
   }
 
