@@ -10,8 +10,6 @@
  *     — 1.1 M domains pre-compiled into blocklist.gz, loaded at startup
  *  5. Known malicious / unsafe site patterns
  *  6. Malicious/suspicious sites — link-shield offline heuristics
- *  7. Screen capture — blocks getDisplayMedia / screen-sourced getUserMedia
- *     via the content script; notifications are shown here when blocked.
  *
  * The blocklist is bundled with the extension (no external network requests).
  * It was compiled from:
@@ -901,35 +899,6 @@ chrome.management.onDisabled.addListener((info) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Screen Capture Protection
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Handles screen-capture-blocked events relayed by the content script.
- * Shows a Chrome notification whenever a page attempts to use the
- * Screen Capture API (getDisplayMedia / getUserMedia with a screen source).
- */
-chrome.runtime.onMessage.addListener((message, sender) => {
-  if (message.type !== "SCREEN_CAPTURE_BLOCKED") return;
-
-  // Only handle messages that originate from our own extension's content scripts.
-  if (!sender || sender.id !== chrome.runtime.id) return;
-
-  let hostname = message.url || "unknown page";
-  try {
-    hostname = new URL(message.url).hostname;
-  } catch (_e) {
-    // fall back to the raw URL string
-  }
-
-  chrome.notifications.create({
-    type: "basic",
-    title: "Screen Capture Blocked",
-    message: `PalsPlan Web Protector blocked a screen recording attempt on ${hostname}.`,
-    priority: 2,
-  });
-});
 chrome.alarms.create("integrityCheck", {
   periodInMinutes: 60
 });
