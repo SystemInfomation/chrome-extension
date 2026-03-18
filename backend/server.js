@@ -25,8 +25,7 @@ const { WebSocketServer } = require("ws");
 // Configuration
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PORT             = parseInt(process.env.PORT || "3001", 10);
-const DASHBOARD_ORIGIN = process.env.DASHBOARD_ORIGIN || "*";
+const PORT = parseInt(process.env.PORT || "3001", 10);
 
 /** Maximum number of activity entries kept in memory. */
 const MAX_ACTIVITY_SIZE = 10_000;
@@ -132,6 +131,11 @@ function extractDomain(url) {
   }
 }
 
+// Keywords used to classify block reason severity
+const SEVERITY_CRITICAL = ["adult", "malicious", "malware", "ransomware", "phishing"];
+const SEVERITY_HIGH     = ["vpn", "proxy"];
+const SEVERITY_MEDIUM   = ["blocklist", "family"];
+
 /**
  * Map a block reason string to a severity level.
  * @param {string|null} reason
@@ -140,9 +144,9 @@ function extractDomain(url) {
 function getSeverity(reason) {
   if (!reason) return "low";
   const r = reason.toLowerCase();
-  if (r.includes("adult") || r.includes("malicious") || r.includes("malware") || r.includes("ransomware") || r.includes("phishing")) return "critical";
-  if (r.includes("vpn") || r.includes("proxy"))   return "high";
-  if (r.includes("blocklist") || r.includes("family")) return "medium";
+  if (SEVERITY_CRITICAL.some((kw) => r.includes(kw))) return "critical";
+  if (SEVERITY_HIGH.some((kw) => r.includes(kw)))     return "high";
+  if (SEVERITY_MEDIUM.some((kw) => r.includes(kw)))   return "medium";
   return "low";
 }
 
@@ -153,15 +157,12 @@ function getSeverity(reason) {
 const app = express();
 app.use(express.json());
 
-// CORS middleware
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (DASHBOARD_ORIGIN === "*" || origin === DASHBOARD_ORIGIN) {
-    res.setHeader("Access-Control-Allow-Origin", origin || "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  }
-  if (req.method === "OPTIONS") return res.sendStatus(204);
+// CORS — allow all origins (private deployment, no auth needed)
+app.use((_req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (_req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
 
@@ -425,6 +426,5 @@ wss.on("connection", (ws, req) => {
 
 server.listen(PORT, () => {
   console.log(`[PalsPlan] Server listening on port ${PORT}`);
-  console.log(`[PalsPlan] CORS origin: ${DASHBOARD_ORIGIN}`);
   console.log(`[PalsPlan] WebSocket endpoint: ws://localhost:${PORT}/ws`);
 });

@@ -7,6 +7,4 @@ services:
     envVars:
       - key: PORT
         value: 10000
-      - key: DASHBOARD_ORIGIN
-        sync: false  # Set this in the Render dashboard to your Vercel URL
     autoDeploy: true

@@ -85,6 +85,26 @@
       margin-top: 3px; line-height: 1.4;
     }
 
+    /* ── Monitor status row ── */
+    .monitor-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 12px 8px;
+      border-top: 1px solid #e2e8f0;
+    }
+    .monitor-label {
+      font-size: 10px; color: #94a3b8; font-weight: 500;
+    }
+    .monitor-pill {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 10px; font-weight: 600;
+      padding: 2px 7px; border-radius: 99px;
+    }
+    .monitor-dot {
+      width: 5px; height: 5px; border-radius: 50%;
+    }
+    .monitor-on  { background: #dcfce7; color: #16a34a; }
+    .monitor-off { background: #f1f5f9; color: #94a3b8; }
+
     /* ── Footer ── */
     .footer {
       border-top: 1px solid #e2e8f0;
@@ -144,6 +164,15 @@
       <div class="stat-num" id="blocked-total">—</div>
       <div class="stat-lbl">Total blocked</div>
     </div>
+  </div>
+
+  <!-- Monitor status -->
+  <div class="monitor-row">
+    <span class="monitor-label">Monitoring</span>
+    <span class="monitor-pill monitor-off" id="monitor-status">
+      <span class="monitor-dot" id="monitor-dot" style="background:#94a3b8"></span>
+      <span id="monitor-text">Checking…</span>
+    </span>
   </div>
 
   <!-- Footer -->

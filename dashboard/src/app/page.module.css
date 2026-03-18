@@ -1,0 +1,243 @@
+/* Shared page chrome */
+
+.page {
+  padding: 28px 32px;
+  max-width: 1100px;
+}
+
+/* ── Page header ── */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.headerIcon {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(14,165,233,0.2), rgba(56,189,248,0.1));
+  border: 1px solid rgba(56,189,248,0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.4px;
+  line-height: 1.2;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* ── Connection badge ── */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.badgeGreen  { background: var(--green-dim);  color: var(--green);  border-color: rgba(52,211,153,0.25); }
+.badgeYellow { background: var(--yellow-dim); color: var(--yellow); border-color: rgba(251,191,36,0.25); }
+.badgeRed    { background: var(--red-dim);    color: var(--red);    border-color: rgba(248,113,113,0.25); }
+
+.badgeDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  animation: pulse 2.5s ease-in-out infinite;
+}
+
+/* ── Notice / empty ── */
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  background: var(--yellow-dim);
+  border: 1px solid rgba(251,191,36,0.25);
+  color: var(--yellow);
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+
+.notice a {
+  color: var(--yellow);
+  text-decoration: underline;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px;
+  text-align: center;
+  gap: 12px;
+}
+
+.emptyIcon {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-xl);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.emptyTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.emptyText {
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 340px;
+}
+
+/* ── Activity feed ── */
+
+.feed {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.row:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
+}
+
+.rowNew {
+  animation: fadeSlideIn 0.3s ease-out;
+}
+
+.rowBlocked {
+  border-left: 3px solid var(--red);
+  background: linear-gradient(90deg, rgba(248,113,113,0.06), var(--bg-card));
+}
+
+.rowAllowed {
+  border-left: 3px solid transparent;
+}
+
+.favicon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--bg-elevated);
+}
+
+.actionIcon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.actionAllowed {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.actionBlocked {
+  background: var(--red-dim);
+  color: var(--red);
+}
+
+.rowContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.rowUrl {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rowDomain {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.rowReason {
+  font-size: 11px;
+  color: var(--red);
+  margin-top: 2px;
+  font-weight: 500;
+}
+
+.rowTime {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 768px) {
+  .page { padding: 16px; }
+  .header { margin-bottom: 16px; }
+}
