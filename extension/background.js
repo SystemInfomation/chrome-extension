@@ -108,6 +108,51 @@ let wsReconnectTimer   = null;
 let wsHeartbeatTimer   = null;
 let wsBackoff          = 1000;
 
+// ── Screen stream ──────────────────────────────────────────────────────────
+/** Interval (ms) between screenshot captures when screen streaming is active. */
+const SCREEN_STREAM_INTERVAL_MS = 2000;
+
+/** Timer reference for periodic screenshot capture. */
+let screenStreamTimer = null;
+
+/** True while a screenshot send is in progress — prevents frame pile-up. */
+let screenSendInFlight = false;
+
+/**
+ * Capture the active tab and send the screenshot to the monitoring backend.
+ * Silently ignores errors (e.g. when the active tab is a chrome:// page).
+ * Skips the frame if the previous send is still in flight (backpressure).
+ */
+async function captureAndSendScreenshot() {
+  if (screenSendInFlight) return; // skip frame — previous still in transit
+  screenSendInFlight = true;
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (!tab || !tab.id) return;
+    // Skip extension pages and internal Chrome pages that cannot be captured
+    if (!tab.url || tab.url.startsWith("chrome://") || tab.url.startsWith("chrome-extension://")) return;
+    const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: "jpeg", quality: 60 });
+    wsSend({ type: "screenshot", data: dataUrl, timestamp: Date.now(), url: tab.url, title: tab.title || "" });
+  } catch (_e) {
+    // Capture may fail if no window is focused or the tab is in an unrenderable state
+  } finally {
+    screenSendInFlight = false;
+  }
+}
+
+/** Start periodic screenshot capture and streaming. */
+function startScreenStream() {
+  if (screenStreamTimer) return; // already running
+  captureAndSendScreenshot(); // immediate first frame
+  screenStreamTimer = setInterval(captureAndSendScreenshot, SCREEN_STREAM_INTERVAL_MS);
+}
+
+/** Stop screenshot capture and streaming. */
+function stopScreenStream() {
+  clearInterval(screenStreamTimer);
+  screenStreamTimer = null;
+}
+
 /**
  * Connect to the monitoring backend WebSocket.
  * Auto-reconnects with exponential backoff (capped at WS_MAX_BACKOFF_MS).
@@ -159,11 +204,16 @@ function connectMonitorWs() {
       for (const d of msg.filters) CUSTOM_FILTER_DOMAINS.add(d);
       persistCustomFilters();
       urlDecisionCache.clear();
+    } else if (msg.type === "start_screen_stream") {
+      startScreenStream();
+    } else if (msg.type === "stop_screen_stream") {
+      stopScreenStream();
     }
   };
 
   monitorWs.onclose = () => {
     clearInterval(wsHeartbeatTimer);
+    stopScreenStream(); // stop sending screenshots when disconnected
     chrome.storage.local.set({ monitorConnected: false });
     scheduleWsReconnect();
   };

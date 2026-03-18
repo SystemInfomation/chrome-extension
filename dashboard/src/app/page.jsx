@@ -1,12 +1,15 @@
 "use client";
 
 import { useRef } from "react";
-import { Radio, Wifi, Globe, ShieldOff, Clock } from "lucide-react";
+import { Radio, Wifi, Globe, ShieldOff, Clock, Monitor, MonitorOff } from "lucide-react";
 import { useMonitor } from "../context/MonitorContext";
 import styles from "./page.module.css";
 
 export default function LiveView() {
-  const { liveEntries, wsStatus, extensionOnline } = useMonitor();
+  const {
+    liveEntries, wsStatus, extensionOnline,
+    liveScreenshot, screenStreamActive, startScreenStream, stopScreenStream,
+  } = useMonitor();
   const listRef = useRef(null);
   void listRef; // ref reserved for future scroll-to-top behaviour
 
@@ -25,6 +28,16 @@ export default function LiveView() {
         </div>
         <ConnectionBadge wsStatus={wsStatus} extensionOnline={extensionOnline} />
       </div>
+
+      {/* Live Screen panel */}
+      <LiveScreenPanel
+        screenshot={liveScreenshot}
+        active={screenStreamActive}
+        extensionOnline={extensionOnline}
+        wsStatus={wsStatus}
+        onStart={startScreenStream}
+        onStop={stopScreenStream}
+      />
 
       {/* Empty state */}
       {liveEntries.length === 0 && (
@@ -51,6 +64,62 @@ export default function LiveView() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function LiveScreenPanel({ screenshot, active, extensionOnline, wsStatus, onStart, onStop }) {
+  const canStream = wsStatus === "connected" && extensionOnline;
+
+  return (
+    <div className={styles.screenPanel}>
+      <div className={styles.screenPanelHeader}>
+        <div className={styles.screenPanelTitle}>
+          <Monitor size={15} strokeWidth={2} />
+          Live Screen
+          {active && screenshot && <span className={styles.screenLiveBadge}><span className={styles.screenLiveDot} />LIVE</span>}
+        </div>
+        <div className={styles.screenPanelControls}>
+          {active ? (
+            <button className={`${styles.screenBtn} ${styles.screenBtnStop}`} onClick={onStop}>
+              <MonitorOff size={13} strokeWidth={2} /> Stop
+            </button>
+          ) : (
+            <button
+              className={`${styles.screenBtn} ${styles.screenBtnStart}`}
+              onClick={onStart}
+              disabled={!canStream}
+              title={!canStream ? "Extension must be online to view live screen" : "Start live screen view"}
+            >
+              <Monitor size={13} strokeWidth={2} /> Watch Screen
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className={styles.screenDisplay}>
+        {screenshot ? (
+          <img
+            src={screenshot}
+            alt="Live screen capture"
+            className={styles.screenImg}
+          />
+        ) : (
+          <div className={styles.screenPlaceholder}>
+            {active ? (
+              <>
+                <Monitor size={28} strokeWidth={1.5} className={styles.screenPlaceholderIcon} />
+                <span>Waiting for first frame…</span>
+              </>
+            ) : (
+              <>
+                <Monitor size={28} strokeWidth={1.5} className={styles.screenPlaceholderIcon} />
+                <span>{canStream ? 'Click "Watch Screen" to view the live screen' : "Extension offline — cannot show live screen"}</span>
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
