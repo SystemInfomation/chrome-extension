@@ -241,3 +241,133 @@
   .page { padding: 16px; }
   .header { margin-bottom: 16px; }
 }
+
+/* ── Live Screen panel ── */
+
+.screenPanel {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.screenPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.screenPanelTitle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.screenLiveBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--red-dim);
+  border: 1px solid rgba(248,113,113,0.3);
+  color: var(--red);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.screenLiveDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.screenPanelControls {
+  display: flex;
+  gap: 8px;
+}
+
+.screenBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.screenBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.screenBtnStart {
+  background: linear-gradient(135deg, rgba(14,165,233,0.2), rgba(56,189,248,0.1));
+  border-color: rgba(56,189,248,0.3);
+  color: var(--accent);
+}
+
+.screenBtnStart:not(:disabled):hover {
+  background: linear-gradient(135deg, rgba(14,165,233,0.3), rgba(56,189,248,0.2));
+}
+
+.screenBtnStop {
+  background: var(--red-dim);
+  border-color: rgba(248,113,113,0.3);
+  color: var(--red);
+}
+
+.screenBtnStop:hover {
+  background: rgba(248,113,113,0.2);
+}
+
+.screenDisplay {
+  position: relative;
+  width: 100%;
+  background: var(--bg-elevated);
+  min-height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.screenImg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 540px;
+  object-fit: contain;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.screenPlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 24px;
+  color: var(--text-dim);
+  font-size: 13px;
+  text-align: center;
+}
+
+.screenPlaceholderIcon {
+  color: var(--text-dim);
+  opacity: 0.5;
+}

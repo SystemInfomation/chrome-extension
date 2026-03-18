@@ -395,6 +395,24 @@ wss.on("connection", (ws, req) => {
       // Forward activity to all dashboard clients in real-time
       broadcast({ type: "activity", entry }, "dashboard");
 
+    } else if (msg.type === "screenshot") {
+      // Live screenshot from the extension — relay to all dashboards
+      if (role === "extension" && msg.data) {
+        broadcast({ type: "screenshot", data: msg.data, timestamp: msg.timestamp || Date.now(), url: msg.url || "", title: msg.title || "" }, "dashboard");
+      }
+
+    } else if (msg.type === "start_screen_stream") {
+      // Dashboard requesting live screen stream — forward to extension(s)
+      if (role === "dashboard") {
+        broadcast({ type: "start_screen_stream" }, "extension");
+      }
+
+    } else if (msg.type === "stop_screen_stream") {
+      // Dashboard stopping live screen stream — forward to extension(s)
+      if (role === "dashboard") {
+        broadcast({ type: "stop_screen_stream" }, "extension");
+      }
+
     } else if (msg.type === "status") {
       // Extension heartbeat / status update
       if (role === "extension") {
@@ -411,6 +429,8 @@ wss.on("connection", (ws, req) => {
     if (!anyExtension && role === "extension") {
       extensionConnected = false;
       broadcast({ type: "status", status: "offline" }, "dashboard");
+      // Extension is gone — tell dashboards the screen stream has stopped
+      broadcast({ type: "screen_stream_stopped" }, "dashboard");
     }
     console.log(`[PalsPlan WS] ${role} disconnected (${clients.size} remaining)`);
   });

@@ -4,13 +4,17 @@
  * MonitorContext — app-wide WebSocket state shared across all pages.
  *
  * Provides:
- *  - wsStatus:        "connecting" | "connected" | "disconnected"
- *  - extensionOnline: boolean — whether the extension is currently active
- *  - liveEntries:     ActivityEntry[] — real-time activity feed (newest first)
- *  - newAlertCount:   number — unseen alerts badge
- *  - clearAlerts():   reset the badge
- *  - backendUrl:      string — configurable backend HTTP(S) URL
- *  - setBackendUrl(): update and persist backend URL
+ *  - wsStatus:            "connecting" | "connected" | "disconnected"
+ *  - extensionOnline:     boolean — whether the extension is currently active
+ *  - liveEntries:         ActivityEntry[] — real-time activity feed (newest first)
+ *  - newAlertCount:       number — unseen alerts badge
+ *  - clearAlerts():       reset the badge
+ *  - backendUrl:          string — configurable backend HTTP(S) URL
+ *  - setBackendUrl():     update and persist backend URL
+ *  - liveScreenshot:      string|null — latest screenshot data URL from extension
+ *  - screenStreamActive:  boolean — whether live screen stream is running
+ *  - startScreenStream(): ask the extension to start sending screenshots
+ *  - stopScreenStream():  ask the extension to stop sending screenshots
  */
 
 import {
@@ -38,10 +42,12 @@ export function MonitorProvider({ children }) {
     if (stored) setBackendUrlState(stored);
   }, []);
 
-  const [wsStatus, setWsStatus]         = useState("disconnected");
-  const [extensionOnline, setExtOnline] = useState(false);
-  const [liveEntries, setLiveEntries]   = useState([]);
-  const [newAlertCount, setAlertCount]  = useState(0);
+  const [wsStatus, setWsStatus]               = useState("disconnected");
+  const [extensionOnline, setExtOnline]        = useState(false);
+  const [liveEntries, setLiveEntries]          = useState([]);
+  const [newAlertCount, setAlertCount]         = useState(0);
+  const [liveScreenshot, setLiveScreenshot]    = useState(null);
+  const [screenStreamActive, setStreamActive] = useState(false);
 
   const wsRef        = useRef(null);
   const reconnectRef = useRef(null);
@@ -87,12 +93,18 @@ export function MonitorProvider({ children }) {
         }
       } else if (msg.type === "status") {
         setExtOnline(msg.status === "online");
+      } else if (msg.type === "screenshot" && msg.data) {
+        setLiveScreenshot(msg.data);
+      } else if (msg.type === "screen_stream_stopped") {
+        setStreamActive(false);
+        setLiveScreenshot(null);
       }
     };
 
     ws.onclose = () => {
       if (!mountedRef.current) return;
       setWsStatus("disconnected");
+      setStreamActive(false);
       wsRef.current = null;
       const delay = Math.min(backoffRef.current, 30_000);
       backoffRef.current = Math.min(delay * 2, 30_000);
@@ -130,6 +142,23 @@ export function MonitorProvider({ children }) {
 
   const clearAlerts = useCallback(() => setAlertCount(0), []);
 
+  // ── Screen stream controls ──────────────────────────────────────────────
+
+  const startScreenStream = useCallback(() => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    wsRef.current.send(JSON.stringify({ type: "start_screen_stream" }));
+    setStreamActive(true);
+    setLiveScreenshot(null);
+  }, []);
+
+  const stopScreenStream = useCallback(() => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "stop_screen_stream" }));
+    }
+    setStreamActive(false);
+    setLiveScreenshot(null);
+  }, []);
+
   return (
     <MonitorContext.Provider
       value={{
@@ -140,6 +169,10 @@ export function MonitorProvider({ children }) {
         clearAlerts,
         backendUrl,
         setBackendUrl,
+        liveScreenshot,
+        screenStreamActive,
+        startScreenStream,
+        stopScreenStream,
       }}
     >
       {children}
