@@ -1,15 +1,14 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { Radio, Wifi, WifiOff, Globe, ShieldOff, Clock } from "lucide-react";
+import { useRef } from "react";
+import { Radio, Wifi, Globe, ShieldOff, Clock } from "lucide-react";
 import { useMonitor } from "../context/MonitorContext";
 import styles from "./page.module.css";
 
 export default function LiveView() {
-  const { liveEntries, wsStatus, extensionOnline, backendUrl } = useMonitor();
+  const { liveEntries, wsStatus, extensionOnline } = useMonitor();
   const listRef = useRef(null);
-
-  const isUnconfigured = !backendUrl || backendUrl.includes("YOUR_RENDER_URL");
+  void listRef; // ref reserved for future scroll-to-top behaviour
 
   return (
     <div className={styles.page}>
@@ -27,19 +26,8 @@ export default function LiveView() {
         <ConnectionBadge wsStatus={wsStatus} extensionOnline={extensionOnline} />
       </div>
 
-      {/* Unconfigured notice */}
-      {isUnconfigured && (
-        <div className={styles.notice}>
-          <WifiOff size={16} />
-          <span>
-            Backend URL not configured. Go to{" "}
-            <a href="/settings">Settings</a> to set your Render.com URL.
-          </span>
-        </div>
-      )}
-
       {/* Empty state */}
-      {!isUnconfigured && liveEntries.length === 0 && (
+      {liveEntries.length === 0 && (
         <div className={styles.empty}>
           <div className={styles.emptyIcon}>
             <Radio size={32} strokeWidth={1.5} />
@@ -68,16 +56,16 @@ export default function LiveView() {
 }
 
 function ActivityRow({ entry, isNew }) {
-  const blocked = entry.action === "blocked";
-  const domain  = entry.domain || extractDomain(entry.url);
-  const time    = formatTime(entry.timestamp);
+  const blocked    = entry.action === "blocked";
+  const domain     = entry.domain || extractDomain(entry.url);
+  const time       = formatTime(entry.timestamp);
   const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
 
   return (
     <div className={`${styles.row} ${blocked ? styles.rowBlocked : styles.rowAllowed} ${isNew ? styles.rowNew : ""}`}>
       {/* Favicon */}
       <div className={styles.favicon}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {/* Favicon loaded at runtime from Google's favicon API */}
         <img
           src={faviconUrl}
           alt=""
@@ -91,7 +79,7 @@ function ActivityRow({ entry, isNew }) {
       <div className={`${styles.actionIcon} ${blocked ? styles.actionBlocked : styles.actionAllowed}`}>
         {blocked
           ? <ShieldOff size={13} strokeWidth={2.5} />
-          : <Globe      size={13} strokeWidth={2} />}
+          : <Globe     size={13} strokeWidth={2} />}
       </div>
 
       {/* Content */}
@@ -151,7 +139,7 @@ function ConnectionBadge({ wsStatus, extensionOnline }) {
 
 function extractDomain(url) {
   try { return new URL(url).hostname.replace(/^www\./, ""); }
-  catch (_e) { return url; }
+  catch { return url; }
 }
 
 function formatTime(ts) {

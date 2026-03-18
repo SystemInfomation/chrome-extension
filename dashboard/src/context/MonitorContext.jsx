@@ -22,7 +22,8 @@ import {
   useRef,
 } from "react";
 
-const DEFAULT_BACKEND_URL = "https://YOUR_RENDER_URL.onrender.com";
+/** Default backend URL — pre-configured for this deployment. */
+const DEFAULT_BACKEND_URL = "https://chrome-extension-lwck.onrender.com";
 const STORAGE_KEY = "palsplan_backend_url";
 const MAX_LIVE_ENTRIES = 500;
 
@@ -31,7 +32,7 @@ const MonitorContext = createContext(null);
 export function MonitorProvider({ children }) {
   const [backendUrl, setBackendUrlState] = useState(DEFAULT_BACKEND_URL);
 
-  // Hydrate from localStorage on mount (client-only)
+  // Hydrate from localStorage on mount — lets user override from Settings
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) setBackendUrlState(stored);
@@ -46,11 +47,13 @@ export function MonitorProvider({ children }) {
   const reconnectRef = useRef(null);
   const backoffRef   = useRef(1000);
   const mountedRef   = useRef(true);
+  // Stable ref so the onclose handler always calls the latest connect fn
+  const connectRef   = useRef(null);
 
   // ── WebSocket connection ────────────────────────────────────────────────
 
   const connect = useCallback(() => {
-    if (!backendUrl || backendUrl.includes("YOUR_RENDER_URL")) return;
+    if (!backendUrl) return;
 
     const wsUrl =
       backendUrl
@@ -72,7 +75,7 @@ export function MonitorProvider({ children }) {
     ws.onmessage = (event) => {
       if (!mountedRef.current) return;
       let msg;
-      try { msg = JSON.parse(event.data); } catch (_e) { return; }
+      try { msg = JSON.parse(event.data); } catch { return; }
 
       if (msg.type === "activity" && msg.entry) {
         setLiveEntries((prev) => {
@@ -93,11 +96,17 @@ export function MonitorProvider({ children }) {
       wsRef.current = null;
       const delay = Math.min(backoffRef.current, 30_000);
       backoffRef.current = Math.min(delay * 2, 30_000);
-      reconnectRef.current = setTimeout(connect, delay);
+      // Use the ref so we always call the latest version of connect
+      reconnectRef.current = setTimeout(() => connectRef.current?.(), delay);
     };
 
     ws.onerror = () => { ws.close(); };
   }, [backendUrl]);
+
+  // Keep ref in sync with the latest connect fn (inside effect, not during render)
+  useEffect(() => {
+    connectRef.current = connect;
+  });
 
   useEffect(() => {
     mountedRef.current = true;

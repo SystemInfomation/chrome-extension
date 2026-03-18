@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Settings, Wifi, WifiOff, Plus, Trash2, RefreshCw, CheckCircle } from "lucide-react";
+import { Settings, Plus, Trash2, RefreshCw, CheckCircle } from "lucide-react";
 import { useMonitor } from "../../context/MonitorContext";
 import styles from "./page.module.css";
 
@@ -127,7 +127,7 @@ export default function SettingsPage() {
       <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Backend URL</h2>
         <p className={styles.sectionDesc}>
-          Your Render.com server URL. Replace <code>YOUR_RENDER_URL</code> after deploying.
+          Your Render.com server URL. Update this if you redeploy the backend.
         </p>
         <div className={styles.card}>
           <div className={styles.urlRow}>

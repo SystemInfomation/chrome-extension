@@ -42,7 +42,7 @@ const BLOCKED_PAGE_BASE = "https://blocked.palsplan.app";
  * Replace with your actual Render.com URL, e.g.:
  *   "wss://palsplan-monitor.onrender.com/ws"
  */
-const MONITOR_WS_URL = "wss://YOUR_RENDER_URL.onrender.com/ws";
+const MONITOR_WS_URL = "wss://chrome-extension-lwck.onrender.com/ws";
 
 /** Heartbeat interval in milliseconds (keeps the WS connection alive). */
 const WS_HEARTBEAT_INTERVAL_MS = 30_000;
@@ -114,8 +114,8 @@ let wsBackoff          = 1000;
  * No-ops if MONITOR_WS_URL still contains the placeholder text.
  */
 function connectMonitorWs() {
-  if (MONITOR_WS_URL.includes("YOUR_RENDER_URL")) {
-    console.warn("[PalsPlan] Monitoring disabled: set MONITOR_WS_URL in background.js to your Render.com URL.");
+  if (!MONITOR_WS_URL || MONITOR_WS_URL.trim() === "") {
+    console.warn("[PalsPlan] Monitoring disabled: MONITOR_WS_URL is not set.");
     return;
   }
 
