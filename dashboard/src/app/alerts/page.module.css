@@ -1,0 +1,153 @@
+/* Alerts page styles */
+
+.page {
+  padding: 28px 32px;
+  max-width: 900px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.headerLeft { display: flex; align-items: center; gap: 14px; }
+
+.headerIcon {
+  width: 42px; height: 42px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(248,113,113,0.2), rgba(248,113,113,0.1));
+  border: 1px solid rgba(248,113,113,0.2);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--red);
+}
+
+.title    { font-size: 20px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.4px; }
+.subtitle { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+.countBadge {
+  font-size: 12px; font-weight: 600; color: var(--text-muted);
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  padding: 4px 12px; border-radius: 99px;
+}
+
+/* ── Notice / error / empty ── */
+
+.notice {
+  padding: 14px 18px; border-radius: var(--radius);
+  background: var(--yellow-dim); border: 1px solid rgba(251,191,36,0.25);
+  color: var(--yellow); font-size: 13px;
+}
+.notice a { color: var(--yellow); text-decoration: underline; }
+
+.error {
+  padding: 12px 16px; border-radius: var(--radius);
+  background: var(--red-dim); border: 1px solid rgba(248,113,113,0.25);
+  color: var(--red); font-size: 13px; margin-bottom: 16px;
+}
+
+.empty {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 80px 24px; text-align: center; gap: 12px;
+}
+.emptyIcon {
+  width: 64px; height: 64px; border-radius: var(--radius-xl);
+  background: var(--bg-card); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-dim); margin-bottom: 4px;
+}
+.emptyTitle { font-size: 16px; font-weight: 600; color: var(--text-secondary); }
+.emptyText  { font-size: 13px; color: var(--text-muted); max-width: 300px; }
+
+/* ── Alert cards ── */
+
+.alertList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeletonCard { height: 76px; border-radius: var(--radius-lg); }
+
+.alertCard {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-left: 3px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+  animation: fadeSlideIn 0.25s ease-out;
+}
+
+.alertCard:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
+}
+
+.severityBadge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 99px;
+  font-size: 11px; font-weight: 700;
+  border: 1px solid transparent;
+  white-space: nowrap; flex-shrink: 0;
+}
+
+.alertContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.alertUrl {
+  font-size: 13px; font-weight: 500; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.alertMeta {
+  display: flex; gap: 10px; margin-top: 4px; flex-wrap: wrap;
+}
+
+.alertDomain {
+  font-size: 11px; color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.alertReason {
+  font-size: 11px; color: var(--text-secondary);
+}
+
+.alertTime {
+  font-size: 11px; color: var(--text-muted);
+  white-space: nowrap; flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Pagination ── */
+
+.pagination {
+  display: flex; align-items: center; justify-content: center;
+  gap: 16px; margin-top: 20px;
+}
+
+.pageBtn {
+  display: flex; align-items: center; gap: 4px;
+  padding: 7px 14px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--bg-card);
+  color: var(--text-secondary); font-size: 13px; font-weight: 500;
+  transition: background 0.15s, color 0.15s;
+}
+.pageBtn:hover:not(:disabled) { background: var(--bg-elevated); color: var(--text-primary); }
+.pageBtn:disabled { opacity: 0.4; cursor: default; }
+
+.pageInfo { font-size: 13px; color: var(--text-muted); }
+
+@media (max-width: 768px) {
+  .page { padding: 16px; }
+  .alertCard { flex-wrap: wrap; }
+}

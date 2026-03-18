@@ -33,6 +33,23 @@ import { detectSuspiciousLink } from "link-shield";
 /** Blocked-page URL (must be internet-accessible and HTTPS). */
 const BLOCKED_PAGE_BASE = "https://blocked.palsplan.app";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Monitoring Configuration — change this to your Render.com URL after deploy
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * WebSocket endpoint for the parental monitoring backend.
+ * Replace with your actual Render.com URL, e.g.:
+ *   "wss://palsplan-monitor.onrender.com/ws"
+ */
+const MONITOR_WS_URL = "wss://chrome-extension-lwck.onrender.com/ws";
+
+/** Heartbeat interval in milliseconds (keeps the WS connection alive). */
+const WS_HEARTBEAT_INTERVAL_MS = 30_000;
+
+/** Maximum reconnect backoff in milliseconds. */
+const WS_MAX_BACKOFF_MS = 30_000;
+
 /**
  * GitHub releases URL for extension updates.
  * The extension checks this URL for new versions and notifies users.
@@ -66,6 +83,164 @@ const RISK_SCORE_THRESHOLD = 70;
  */
 const MAX_CACHE_SIZE = 500;
 const urlDecisionCache = new Map();
+
+/**
+ * Custom domains added by the parent via the monitoring dashboard.
+ * Persisted in chrome.storage.local under "customFilterDomains".
+ * Loaded into this in-memory Set at service-worker startup.
+ */
+const CUSTOM_FILTER_DOMAINS = new Set();
+
+// Load custom filters from storage on SW startup
+chrome.storage.local.get(["customFilterDomains"], (result) => {
+  const domains = result.customFilterDomains;
+  if (Array.isArray(domains)) {
+    for (const d of domains) CUSTOM_FILTER_DOMAINS.add(d);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Monitoring WebSocket
+// ─────────────────────────────────────────────────────────────────────────────
+
+let monitorWs          = null;
+let wsReconnectTimer   = null;
+let wsHeartbeatTimer   = null;
+let wsBackoff          = 1000;
+
+/**
+ * Connect to the monitoring backend WebSocket.
+ * Auto-reconnects with exponential backoff (capped at WS_MAX_BACKOFF_MS).
+ * No-ops if MONITOR_WS_URL still contains the placeholder text.
+ */
+function connectMonitorWs() {
+  if (!MONITOR_WS_URL || MONITOR_WS_URL.trim() === "") {
+    console.warn("[PalsPlan] Monitoring disabled: MONITOR_WS_URL is not set.");
+    return;
+  }
+
+  clearTimeout(wsReconnectTimer);
+  clearInterval(wsHeartbeatTimer);
+
+  try {
+    monitorWs = new WebSocket(MONITOR_WS_URL + "?role=extension");
+  } catch (_e) {
+    scheduleWsReconnect();
+    return;
+  }
+
+  monitorWs.onopen = () => {
+    wsBackoff   = 1000; // reset backoff on success
+    // Announce the extension is online
+    wsSend({ type: "status", status: "online" });
+    // Send current custom filters to backend for syncing
+    if (CUSTOM_FILTER_DOMAINS.size > 0) {
+      wsSend({ type: "filters_sync", filters: Array.from(CUSTOM_FILTER_DOMAINS) });
+    }
+    // Heartbeat every 30 s to keep connection alive through Render's idle timeout
+    wsHeartbeatTimer = setInterval(() => {
+      wsSend({ type: "status", status: "online" });
+    }, WS_HEARTBEAT_INTERVAL_MS);
+    // Update popup connection indicator
+    chrome.storage.local.set({ monitorConnected: true });
+  };
+
+  monitorWs.onmessage = (event) => {
+    let msg;
+    try { msg = JSON.parse(event.data); } catch (_e) { return; }
+
+    if (msg.type === "add_filter" && msg.domain) {
+      addCustomFilter(msg.domain);
+    } else if (msg.type === "remove_filter" && msg.domain) {
+      removeCustomFilter(msg.domain);
+    } else if (msg.type === "filters_sync" && Array.isArray(msg.filters)) {
+      // Full replace from backend (sent on first connect)
+      CUSTOM_FILTER_DOMAINS.clear();
+      for (const d of msg.filters) CUSTOM_FILTER_DOMAINS.add(d);
+      persistCustomFilters();
+      urlDecisionCache.clear();
+    }
+  };
+
+  monitorWs.onclose = () => {
+    clearInterval(wsHeartbeatTimer);
+    chrome.storage.local.set({ monitorConnected: false });
+    scheduleWsReconnect();
+  };
+
+  monitorWs.onerror = () => {
+    monitorWs.close();
+  };
+}
+
+function scheduleWsReconnect() {
+  const delay  = Math.min(wsBackoff, WS_MAX_BACKOFF_MS);
+  wsBackoff    = Math.min(wsBackoff * 2, WS_MAX_BACKOFF_MS);
+  wsReconnectTimer = setTimeout(connectMonitorWs, delay);
+}
+
+/**
+ * Send a JSON payload over the monitoring WebSocket (fire-and-forget).
+ * @param {object} payload
+ */
+function wsSend(payload) {
+  if (monitorWs && monitorWs.readyState === WebSocket.OPEN) {
+    try { monitorWs.send(JSON.stringify(payload)); } catch (_e) { /* ignore */ }
+  }
+}
+
+/**
+ * Report a navigation event (visit or block) to the monitoring backend.
+ *
+ * @param {string}           url
+ * @param {string}           title
+ * @param {"visit"|"blocked"} action
+ * @param {string|null}      reason
+ */
+function reportActivity(url, title, action, reason) {
+  wsSend({
+    type:      "activity",
+    url,
+    title:     title || "",
+    action,
+    reason:    reason || null,
+    timestamp: Date.now(),
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Custom Filter Management
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Add a domain to the runtime custom blocklist and persist it.
+ * @param {string} domain
+ */
+function addCustomFilter(domain) {
+  const d = domain.trim().toLowerCase().replace(/^www\./, "");
+  if (!d) return;
+  CUSTOM_FILTER_DOMAINS.add(d);
+  persistCustomFilters();
+  urlDecisionCache.clear(); // invalidate cache so new rules take effect
+}
+
+/**
+ * Remove a domain from the runtime custom blocklist and persist it.
+ * @param {string} domain
+ */
+function removeCustomFilter(domain) {
+  const d = domain.trim().toLowerCase().replace(/^www\./, "");
+  CUSTOM_FILTER_DOMAINS.delete(d);
+  persistCustomFilters();
+  urlDecisionCache.clear();
+}
+
+/**
+ * Write CUSTOM_FILTER_DOMAINS to chrome.storage.local so they survive SW restarts.
+ */
+function persistCustomFilters() {
+  chrome.storage.local.set({ customFilterDomains: Array.from(CUSTOM_FILTER_DOMAINS) });
+}
 
 /**
  * Domains/hostnames that are always allowed regardless of detection results.
@@ -352,6 +527,22 @@ function isBlocklisted(hostname) {
 }
 
 /**
+ * Returns true if hostname (or any parent domain) is in the parent-defined
+ * custom filter list (CUSTOM_FILTER_DOMAINS).
+ *
+ * @param {string} hostname
+ * @returns {boolean}
+ */
+function isCustomBlocked(hostname) {
+  if (CUSTOM_FILTER_DOMAINS.has(hostname)) return true;
+  const parts = hostname.split(".");
+  for (let i = 1; i < parts.length - 1; i++) {
+    if (CUSTOM_FILTER_DOMAINS.has(parts.slice(i).join("."))) return true;
+  }
+  return false;
+}
+
+/**
  * Load the bundled blocklist.gz into BLOCKLIST_DOMAINS.
  *
  * The file is a gzip-compressed newline-separated list of domains compiled at
@@ -430,12 +621,13 @@ function maybePruneCache() {
  *
  * Family-safe rules (in order):
  *  1. Localhost / loopback → block
- *  2. Adult content keyword/pattern match → block
- *  3. VPN / proxy service domain → block
- *  4. Malicious TLD → block
- *  5. Bundled blocklist domain match → block
- *  6. Known malicious patterns → block
- *  7. link-shield offline heuristics → block if high risk
+ *  2. Custom parent-defined filter → block
+ *  3. Adult content keyword/pattern match → block
+ *  4. VPN / proxy service domain → block
+ *  5. Malicious TLD → block
+ *  6. Bundled blocklist domain match → block
+ *  7. Known malicious patterns → block
+ *  8. link-shield offline heuristics → block if high risk
  *
  * HTTP connections are allowed (not blocked).
  *
@@ -468,27 +660,31 @@ function evaluate(url) {
   ) {
     decision = { blocked: true, reason: "Localhost Access Blocked" };
   }
-  // 2. Adult content check (keyword/pattern match on full URL)
+  // 2. Custom parent-defined domain filter
+  else if (isCustomBlocked(hostname)) {
+    decision = { blocked: true, reason: "Blocked by Parent Filter" };
+  }
+  // 3. Adult content check (keyword/pattern match on full URL)
   else if (ADULT_REGEX.test(url)) {
     decision = { blocked: true, reason: "Adult Content" };
   }
-  // 3. VPN / proxy service check (hostname match)
+  // 4. VPN / proxy service check (hostname match)
   else if (isVpnProxy(hostname)) {
     decision = { blocked: true, reason: "VPN/Proxy Service Blocked" };
   }
-  // 4. Malicious TLD check
+  // 5. Malicious TLD check
   else if (hasMaliciousTld(hostname)) {
     decision = { blocked: true, reason: "Malicious Domain Blocked" };
   }
-  // 5. External blocklist domain check (RPiList porn + AdGuard spyware)
+  // 6. External blocklist domain check (RPiList porn + AdGuard spyware)
   else if (isBlocklisted(hostname)) {
     decision = { blocked: true, reason: "Blocked by Family-Safe Filter" };
   }
-  // 6. Known malicious patterns
+  // 7. Known malicious patterns
   else if (UNSAFE_REGEX.test(url)) {
     decision = { blocked: true, reason: "Malicious Content Blocked" };
   } else {
-    // 7. Malicious / suspicious site check (link-shield offline heuristics)
+    // 8. Malicious / suspicious site check (link-shield offline heuristics)
     try {
       const result = detectSuspiciousLink(url, { threshold: RISK_SCORE_THRESHOLD });
       if (result.suspicious || result.riskScore >= RISK_SCORE_THRESHOLD) {
@@ -559,7 +755,7 @@ function incrementBlockedCount() {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "GET_STATS") {
     chrome.storage.local.get(
-      ["blockedTotal", "blockedToday", "blockedTodayDate", "blocklistSize", "blocklistUpdatedAt"],
+      ["blockedTotal", "blockedToday", "blockedTodayDate", "blocklistSize", "blocklistUpdatedAt", "monitorConnected"],
       (result) => {
         const today = new Date().toDateString();
         sendResponse({
@@ -568,6 +764,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           blocklistSize: result.blocklistSize || BLOCKLIST_DOMAINS.size || 0,
           blocklistUpdatedAt: result.blocklistUpdatedAt || null,
           version: chrome.runtime.getManifest().version,
+          monitorConnected: result.monitorConnected === true,
         });
       }
     );
@@ -619,9 +816,15 @@ chrome.webNavigation.onBeforeNavigate.addListener(
         blockedSet.delete(blockedSet.values().next().value);
       }
 
+      // Report blocked navigation to monitoring backend
+      reportActivity(url, "", "blocked", decision.reason);
+
       // Track statistics and redirect
       incrementBlockedCount();
       chrome.tabs.update(tabId, { url: buildBlockedUrl(url, decision.reason) });
+    } else {
+      // Report allowed navigation to monitoring backend
+      reportActivity(url, "", "visit", null);
     }
   },
   { url: [{ schemes: ["http", "https"] }] }
@@ -815,16 +1018,19 @@ chrome.runtime.onInstalled.addListener((details) => {
     setupUpdateInterval();
     performUpdateCheck();
     loadLocalBlocklist();
+    connectMonitorWs();
   } else if (details.reason === "update") {
     setupUpdateInterval();
     loadLocalBlocklist();
+    connectMonitorWs();
   }
 });
 
-// On service worker startup, load the bundled blocklist and restore intervals
+// On service worker startup, load the bundled blocklist, restore intervals, and connect monitor
 chrome.runtime.onStartup.addListener(() => {
   setupUpdateInterval();
   loadLocalBlocklist();
+  connectMonitorWs();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -921,7 +1127,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Service-worker cold-start: load the bundled blocklist on every SW startup.
+// Service-worker cold-start: load blocklist and connect monitor on every SW start.
 // This handles mid-session SW restarts where onInstalled/onStartup don't fire.
 // ─────────────────────────────────────────────────────────────────────────────
 loadLocalBlocklist();
+connectMonitorWs();

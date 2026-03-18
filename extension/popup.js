@@ -51,7 +51,8 @@
    *   blockedTotal: number,
    *   blocklistSize: number,
    *   blocklistUpdatedAt: number|null,
-   *   version: string
+   *   version: string,
+   *   monitorConnected: boolean
    * }} stats
    */
   function render(stats) {
@@ -65,6 +66,22 @@
     if (el("blocked-total"))   el("blocked-total").textContent   = formatNumber(stats.blockedTotal || 0);
     if (el("blocklist-updated")) {
       el("blocklist-updated").textContent = `Updated ${timeAgo(stats.blocklistUpdatedAt)}`;
+    }
+
+    // Monitoring status indicator
+    const pill = el("monitor-status");
+    const dot  = el("monitor-dot");
+    const txt  = el("monitor-text");
+    if (pill && dot && txt) {
+      if (stats.monitorConnected) {
+        pill.className = "monitor-pill monitor-on";
+        dot.style.background = "#16a34a";
+        txt.textContent = "Active";
+      } else {
+        pill.className = "monitor-pill monitor-off";
+        dot.style.background = "#94a3b8";
+        txt.textContent = "Disconnected";
+      }
     }
   }
 

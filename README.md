@@ -13,7 +13,9 @@ Chrome extension + hosted blocked page that protects users from insecure connect
 palsplan-web-protector/
 ├── extension/
 │   ├── manifest.json          Chrome extension manifest (MV3)
-│   └── background.js          Service worker source (ES module, webpack entry)
+│   ├── background.js          Service worker source — filtering + WS monitoring
+│   ├── popup.html             Extension popup UI
+│   └── popup.js               Popup script (stats + monitoring status)
 ├── blocked-page/
 │   ├── index.html
 │   ├── vite.config.js
@@ -21,10 +23,30 @@ palsplan-web-protector/
 │   └── src/
 │       ├── main.jsx
 │       ├── App.jsx            Reads ?blockedUrl=&reason= query params
-│       ├── App.css            Dark enterprise theme
+│       ├── App.css            Light theme
 │       ├── index.css
 │       └── components/
 │           └── BlockedInfo.jsx
+├── backend/                   Parental monitoring backend (Node.js + ws)
+│   ├── server.js              Express + WebSocket server
+│   ├── package.json
+│   ├── render.yaml            Render.com deployment config
+│   └── .env.example
+├── dashboard/                 Parent monitoring dashboard (React + Next.js)
+│   ├── next.config.mjs
+│   ├── vercel.json
+│   ├── package.json
+│   └── src/
+│       ├── app/               Next.js App Router pages
+│       │   ├── layout.jsx     Root layout with sidebar
+│       │   ├── page.jsx       Live View
+│       │   ├── activity/      Activity Log
+│       │   ├── alerts/        Blocked site alerts
+│       │   └── settings/      Configuration
+│       ├── components/
+│       │   └── Sidebar.jsx
+│       └── context/
+│           └── MonitorContext.jsx  WebSocket state provider
 ├── webpack.config.js          Bundles extension/background.js → extension/dist/
 ├── package.json               Extension build dependencies
 └── README.md
@@ -182,6 +204,84 @@ cd blocked-page
 npx vercel --prod
 # Follow prompts, then set custom domain in Vercel dashboard
 ```
+
+---
+
+## Part 3 — Real-Time Parental Monitoring
+
+The extension includes an optional real-time monitoring system. When enabled, every navigation event (allowed and blocked) is streamed live to a parent dashboard — no third-party service required.
+
+### Architecture
+
+```
+Child's Browser (extension)
+        │  WebSocket (wss://)
+        ▼
+backend/ — Node.js + Express + ws  (hosted on Render.com)
+        │  WebSocket broadcast
+        ▼
+dashboard/ — React + Next.js        (hosted on Vercel)
+```
+
+### Step 1 — Deploy the Backend to Render.com
+
+1. Go to [render.com](https://render.com) → **New → Web Service**
+2. Connect this GitHub repository
+3. Set:
+
+   | Setting          | Value                     |
+   |------------------|---------------------------|
+   | **Root Directory** | `backend`               |
+   | **Build Command** | `npm install`            |
+   | **Start Command** | `npm start`              |
+   | **Environment**  | Node                      |
+
+4. After deploy you'll get a URL like `https://palsplan-monitor.onrender.com`
+
+> Render.com free tier spins down after 15 minutes of inactivity. The extension sends a heartbeat every 30 seconds to keep the service alive.
+
+### Step 2 — Point the Extension at Your Backend
+
+Open `extension/background.js` and change the constant near the top:
+
+```js
+// Change this to your Render.com URL:
+const MONITOR_WS_URL = "wss://palsplan-monitor.onrender.com/ws";
+```
+
+Then rebuild and reinstall the extension:
+```bash
+npm run build
+npm run pack   # creates palsplan-web-protector.zip
+```
+
+### Step 3 — Deploy the Dashboard to Vercel
+
+```bash
+cd dashboard
+npx vercel --prod
+```
+
+Or connect the repo to Vercel:
+1. Go to [vercel.com](https://vercel.com) → **New Project**
+2. Import this repository, set **Root Directory** to `dashboard`
+3. Framework preset: **Next.js** (auto-detected)
+4. Deploy
+
+After deployment, open the dashboard and go to **Settings** → enter your Render.com backend URL.
+
+### Dashboard Pages
+
+| Page | Description |
+|------|-------------|
+| **Live View** | Real-time scrolling feed of every site visited (green = allowed, red = blocked) |
+| **Activity Log** | Searchable/filterable history of all browsing events |
+| **Alerts** | Blocked site attempts, color-coded by severity |
+| **Settings** | Configure backend URL, manage custom blocked domains |
+
+### Custom Blocked Domains
+
+From the dashboard **Settings** page, add domains to block. These are pushed to the extension in real-time via WebSocket — no extension reinstall needed.
 
 ---
 
