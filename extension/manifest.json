@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Watson Estates",
+  "name": "PalsPlan Web Protector",
   "version": "3.7.5",
-  "description": "Keeping the watson family secured.",
+  "description": "Protects users from adult content, malicious websites, phishing, and suspicious URLs using offline heuristics and a bundled domain blocklist. No data is collected or transmitted.",
   "incognito": "spanning",
 
   "icons": {
@@ -19,7 +19,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "Watson Estates",
+    "default_title": "PalsPlan Web Protector",
     "default_popup": "popup.html"
   },
 
@@ -31,15 +31,13 @@
     "webNavigation",
     "tabs",
     "storage",
-    "unlimitedStorage",
     "alarms",
     "notifications",
-    "declarativeNetRequest",
-    "management"
+    "declarativeNetRequest"
   ],
 
   "host_permissions": [
-    "<all_urls>"
+    "*://*/*"
   ],
 
   "content_security_policy": {
