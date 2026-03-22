@@ -1,7 +1,10 @@
 "use client";
 
-import { useRef } from "react";
-import { Radio, Wifi, Globe, ShieldOff, Clock, Monitor, MonitorOff } from "lucide-react";
+import { useRef, useState, useEffect, useCallback } from "react";
+import {
+  Radio, Wifi, Globe, ShieldOff, Clock, Monitor, MonitorOff,
+  Pause, Play, Trash2, Filter, Maximize2, Minimize2, ExternalLink,
+} from "lucide-react";
 import { useMonitor } from "../context/MonitorContext";
 import styles from "./page.module.css";
 
@@ -9,9 +12,43 @@ export default function LiveView() {
   const {
     liveEntries, wsStatus, extensionOnline,
     liveScreenshot, screenStreamActive, startScreenStream, stopScreenStream,
+    clearLiveEntries,
   } = useMonitor();
-  const listRef = useRef(null);
-  void listRef; // ref reserved for future scroll-to-top behaviour
+
+  const feedRef = useRef(null);
+  const [paused, setPaused] = useState(false);
+  const [filterMode, setFilterMode] = useState("all"); // "all" | "blocked" | "allowed"
+  const pausedEntriesRef = useRef([]);
+
+  // When paused, freeze the displayed entries
+  useEffect(() => {
+    if (!paused) {
+      pausedEntriesRef.current = [];
+    }
+  }, [paused]);
+
+  const displayEntries = paused && pausedEntriesRef.current.length > 0
+    ? pausedEntriesRef.current
+    : liveEntries;
+
+  // Capture snapshot when pausing
+  const togglePause = useCallback(() => {
+    setPaused((prev) => {
+      if (!prev) {
+        pausedEntriesRef.current = [...liveEntries];
+      }
+      return !prev;
+    });
+  }, [liveEntries]);
+
+  // Apply filter
+  const filtered = filterMode === "all"
+    ? displayEntries
+    : displayEntries.filter((e) =>
+        filterMode === "blocked" ? e.action === "blocked" : e.action !== "blocked"
+      );
+
+  const blockedCount = displayEntries.filter((e) => e.action === "blocked").length;
 
   return (
     <div className={styles.page}>
@@ -26,7 +63,19 @@ export default function LiveView() {
             <p className={styles.subtitle}>Real-time browsing activity</p>
           </div>
         </div>
-        <ConnectionBadge wsStatus={wsStatus} extensionOnline={extensionOnline} />
+        <div className={styles.headerRight}>
+          {displayEntries.length > 0 && (
+            <div className={styles.entryCount}>
+              <span className={styles.entryCountNum}>{displayEntries.length}</span> events
+              {blockedCount > 0 && (
+                <span className={styles.entryCountBlocked}>
+                  · <ShieldOff size={10} strokeWidth={2.5} /> {blockedCount} blocked
+                </span>
+              )}
+            </div>
+          )}
+          <ConnectionBadge wsStatus={wsStatus} extensionOnline={extensionOnline} />
+        </div>
       </div>
 
       {/* Live Screen panel */}
@@ -39,8 +88,45 @@ export default function LiveView() {
         onStop={stopScreenStream}
       />
 
+      {/* Feed toolbar */}
+      {displayEntries.length > 0 && (
+        <div className={styles.feedToolbar}>
+          <div className={styles.feedToolbarLeft}>
+            <button
+              className={`${styles.toolBtn} ${paused ? styles.toolBtnActive : ""}`}
+              onClick={togglePause}
+              title={paused ? "Resume live feed" : "Pause live feed"}
+            >
+              {paused ? <Play size={13} strokeWidth={2} /> : <Pause size={13} strokeWidth={2} />}
+              {paused ? "Resume" : "Pause"}
+            </button>
+
+            <div className={styles.filterGroup}>
+              <Filter size={12} strokeWidth={2} style={{ color: "var(--text-muted)" }} />
+              {["all", "blocked", "allowed"].map((mode) => (
+                <button
+                  key={mode}
+                  className={`${styles.filterBtn} ${filterMode === mode ? styles.filterActive : ""}`}
+                  onClick={() => setFilterMode(mode)}
+                >
+                  {mode === "all" ? "All" : mode === "blocked" ? "Blocked" : "Allowed"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button
+            className={styles.toolBtn}
+            onClick={clearLiveEntries}
+            title="Clear live feed"
+          >
+            <Trash2 size={12} strokeWidth={2} /> Clear
+          </button>
+        </div>
+      )}
+
       {/* Empty state */}
-      {liveEntries.length === 0 && (
+      {filtered.length === 0 && displayEntries.length === 0 && (
         <div className={styles.empty}>
           <div className={styles.emptyIcon}>
             <Radio size={32} strokeWidth={1.5} />
@@ -50,17 +136,36 @@ export default function LiveView() {
             {wsStatus === "connected"
               ? "Connected. Browsing events will appear here in real-time."
               : wsStatus === "connecting"
-              ? "Connecting to backend…"
-              : "Not connected to backend. Check Settings."}
+                ? "Connecting to backend…"
+                : "Not connected to backend. Check Settings."}
+          </div>
+        </div>
+      )}
+
+      {/* Filtered empty state */}
+      {filtered.length === 0 && displayEntries.length > 0 && (
+        <div className={styles.empty}>
+          <div className={styles.emptyIcon}>
+            <Filter size={28} strokeWidth={1.5} />
+          </div>
+          <div className={styles.emptyTitle}>No matching events</div>
+          <div className={styles.emptyText}>
+            No {filterMode} events in the current feed. Try a different filter.
           </div>
         </div>
       )}
 
       {/* Live feed */}
-      {liveEntries.length > 0 && (
-        <div className={styles.feed} ref={listRef}>
-          {liveEntries.map((entry, i) => (
-            <ActivityRow key={entry.id || i} entry={entry} isNew={i === 0} />
+      {filtered.length > 0 && (
+        <div className={styles.feed} ref={feedRef}>
+          {paused && (
+            <div className={styles.pausedBanner}>
+              <Pause size={12} strokeWidth={2.5} />
+              Feed paused — new events are buffered
+            </div>
+          )}
+          {filtered.map((entry, i) => (
+            <ActivityRow key={entry.id || i} entry={entry} isNew={!paused && i === 0} />
           ))}
         </div>
       )}
@@ -70,16 +175,32 @@ export default function LiveView() {
 
 function LiveScreenPanel({ screenshot, active, extensionOnline, wsStatus, onStart, onStop }) {
   const canStream = wsStatus === "connected" && extensionOnline;
+  const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className={styles.screenPanel}>
+    <div className={`${styles.screenPanel} ${expanded ? styles.screenPanelExpanded : ""}`}>
       <div className={styles.screenPanelHeader}>
         <div className={styles.screenPanelTitle}>
           <Monitor size={15} strokeWidth={2} />
           Live Screen
-          {active && screenshot && <span className={styles.screenLiveBadge}><span className={styles.screenLiveDot} />LIVE</span>}
+          {active && screenshot && (
+            <span className={styles.screenLiveBadge}>
+              <span className={styles.screenLiveDot} />LIVE
+            </span>
+          )}
         </div>
         <div className={styles.screenPanelControls}>
+          {screenshot && (
+            <button
+              className={styles.screenBtn}
+              onClick={() => setExpanded((prev) => !prev)}
+              title={expanded ? "Collapse" : "Expand"}
+            >
+              {expanded
+                ? <Minimize2 size={13} strokeWidth={2} />
+                : <Maximize2 size={13} strokeWidth={2} />}
+            </button>
+          )}
           {active ? (
             <button className={`${styles.screenBtn} ${styles.screenBtnStop}`} onClick={onStop}>
               <MonitorOff size={13} strokeWidth={2} /> Stop
@@ -99,11 +220,14 @@ function LiveScreenPanel({ screenshot, active, extensionOnline, wsStatus, onStar
 
       <div className={styles.screenDisplay}>
         {screenshot ? (
-          <img
-            src={screenshot}
-            alt="Live screen capture"
-            className={styles.screenImg}
-          />
+          <>
+            <img
+              src={screenshot}
+              alt="Live screen capture"
+              className={styles.screenImg}
+            />
+            <ScreenOverlay />
+          </>
         ) : (
           <div className={styles.screenPlaceholder}>
             {active ? (
@@ -124,17 +248,30 @@ function LiveScreenPanel({ screenshot, active, extensionOnline, wsStatus, onStar
   );
 }
 
+function ScreenOverlay() {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className={styles.screenOverlay}>
+      <span className={styles.screenOverlayDot} />
+      <span>Streaming · {new Date(now).toLocaleTimeString()}</span>
+    </div>
+  );
+}
+
 function ActivityRow({ entry, isNew }) {
   const blocked    = entry.action === "blocked";
   const domain     = entry.domain || extractDomain(entry.url);
-  const time       = formatTime(entry.timestamp);
   const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
 
   return (
     <div className={`${styles.row} ${blocked ? styles.rowBlocked : styles.rowAllowed} ${isNew ? styles.rowNew : ""}`}>
       {/* Favicon */}
       <div className={styles.favicon}>
-        {/* Favicon loaded at runtime from Google's favicon API */}
         <img
           src={faviconUrl}
           alt=""
@@ -157,7 +294,10 @@ function ActivityRow({ entry, isNew }) {
           {entry.title || entry.url}
         </div>
         {entry.title && (
-          <div className={styles.rowDomain}>{entry.url}</div>
+          <div className={styles.rowDomain}>
+            <ExternalLink size={9} strokeWidth={2} />
+            {domain}
+          </div>
         )}
         {blocked && entry.reason && (
           <div className={styles.rowReason}>{entry.reason}</div>
@@ -167,10 +307,21 @@ function ActivityRow({ entry, isNew }) {
       {/* Time */}
       <div className={styles.rowTime}>
         <Clock size={11} strokeWidth={2} />
-        {time}
+        <RelativeTime timestamp={entry.timestamp} />
       </div>
     </div>
   );
+}
+
+function RelativeTime({ timestamp }) {
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 5000);
+    return () => clearInterval(id);
+  }, []);
+
+  return <span title={formatAbsoluteTime(timestamp)}>{formatRelativeTime(timestamp)}</span>;
 }
 
 function ConnectionBadge({ wsStatus, extensionOnline }) {
@@ -211,8 +362,19 @@ function extractDomain(url) {
   catch { return url; }
 }
 
-function formatTime(ts) {
+function formatAbsoluteTime(ts) {
   if (!ts) return "";
-  const d = new Date(ts);
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function formatRelativeTime(ts) {
+  if (!ts) return "";
+  const diff = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (diff < 5) return "just now";
+  if (diff < 60) return `${diff}s ago`;
+  const mins = Math.floor(diff / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return formatAbsoluteTime(ts);
 }

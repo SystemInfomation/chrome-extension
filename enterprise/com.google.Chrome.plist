@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS Chrome Enterprise Policy — Force-Install Extension
+  =========================================================
+
+  This plist force-installs the Watson Estates Chrome extension on
+  managed Macs using Google Chrome enterprise policies.
+
+  WHAT IT DOES:
+    - Uses the ExtensionInstallForcelist policy to silently install the
+      extension without user interaction.
+    - Points Chrome at the self-hosted update.xml so the extension is
+      fetched from YOUR server (not the Chrome Web Store).
+    - The extension cannot be uninstalled by the user.
+    - Chrome will periodically poll update.xml for new versions and
+      auto-update silently.
+
+  EXTENSION DETAILS:
+    - Extension ID:  lmaaddldfngeapalhdhgbeeipbjalioe
+    - Update URL:    https://blocked.palsplan.app/updates.xml
+    - CRX hosted at: https://blocked.palsplan.app/palsplan-web-protector.crx
+
+  HOW TO DEPLOY:
+    1. Copy this file to:
+         /Library/Managed Preferences/com.google.Chrome.plist
+
+    2. Set ownership and permissions:
+         sudo chown root:wheel /Library/Managed Preferences/com.google.Chrome.plist
+         sudo chmod 644 /Library/Managed Preferences/com.google.Chrome.plist
+
+    3. Restart Chrome (or wait for the next policy refresh).
+       The extension will appear in chrome://extensions as
+       "Installed by enterprise policy" and cannot be removed.
+
+  FORCELIST FORMAT:
+    Each entry is:  <extension-id>;<update-url>
+    The semicolon separates the extension ID from the URL where Chrome
+    can find the update manifest (updates.xml).
+
+  NOTES:
+    - For MDM (Jamf, Mosyle, Kandji, etc.), upload this as a custom
+      profile targeting the com.google.Chrome preference domain.
+    - If you already have a com.google.Chrome.plist with other policies,
+      merge the ExtensionInstallForcelist array into your existing file
+      rather than replacing it.
+    - This works with both Google Chrome and Google Chrome Beta/Dev/Canary
+      (use the appropriate preference domain).
+
+  REFERENCE:
+    https://chromeenterprise.google/policies/#ExtensionInstallForcelist
+-->
+<plist version="1.0">
+<dict>
+
+  <!--
+    ExtensionInstallForcelist
+    =========================
+    Array of strings, each in the format:
+      <extension-id>;<update-url>
+
+    Chrome will:
+      1. Fetch the update.xml from the URL after the semicolon.
+      2. Parse the <updatecheck> element to find the .crx download URL.
+      3. Download and silently install the .crx.
+      4. Periodically re-check update.xml for version bumps.
+      5. Prevent the user from disabling or uninstalling the extension.
+  -->
+  <key>ExtensionInstallForcelist</key>
+  <array>
+    <string>lmaaddldfngeapalhdhgbeeipbjalioe;https://blocked.palsplan.app/updates.xml</string>
+  </array>
+
+</dict>
+</plist>

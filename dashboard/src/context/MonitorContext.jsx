@@ -9,6 +9,7 @@
  *  - liveEntries:         ActivityEntry[] — real-time activity feed (newest first)
  *  - newAlertCount:       number — unseen alerts badge
  *  - clearAlerts():       reset the badge
+ *  - clearLiveEntries():  empty the live feed
  *  - backendUrl:          string — configurable backend HTTP(S) URL
  *  - setBackendUrl():     update and persist backend URL
  *  - liveScreenshot:      string|null — latest screenshot data URL from extension
@@ -141,6 +142,7 @@ export function MonitorProvider({ children }) {
   }, []);
 
   const clearAlerts = useCallback(() => setAlertCount(0), []);
+  const clearLiveEntries = useCallback(() => setLiveEntries([]), []);
 
   // ── Screen stream controls ──────────────────────────────────────────────
 
@@ -167,6 +169,7 @@ export function MonitorProvider({ children }) {
         liveEntries,
         newAlertCount,
         clearAlerts,
+        clearLiveEntries,
         backendUrl,
         setBackendUrl,
         liveScreenshot,
