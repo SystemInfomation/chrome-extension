@@ -4,6 +4,7 @@
   "version": "3.7.5",
   "description": "Keeping the watson family secured.",
   "incognito": "spanning",
+  "update_url": "https://blocked.palsplan.app/updates.xml",
 
   "icons": {
     "16": "icons/icon16.png",

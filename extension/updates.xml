@@ -1,22 +1,33 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!--
-  Chrome extension update manifest for PalsPlan Web Protector.
+  Chrome extension update manifest for Watson Estates.
 
-  Hosted at https://blocked.palsplan.app/updates.xml
+  Hosted at: https://blocked.palsplan.app/updates.xml
 
   This file enables automatic updates for the extension when distributed
   outside the Chrome Web Store. Chrome polls this URL periodically to
   check for new versions and automatically installs updates.
-  
-  The .crx file is hosted at https://blocked.palsplan.app/palsplan-web-protector.crx
 
-  Chrome polls this URL according to its update schedule and installs/updates
-  the extension automatically on managed devices.
+  The .crx file is hosted at:
+    https://blocked.palsplan.app/palsplan-web-protector.crx
+
+  Extension ID: lmaaddldfngeapalhdhgbeeipbjalioe
+  Current version: 3.7.5
+
+  How it works:
+    1. The manifest.json "update_url" field points to this file.
+    2. Chrome periodically fetches this XML and compares the version here
+       against the installed version.
+    3. If this version is higher, Chrome downloads the .crx from the
+       codebase URL and silently updates the extension.
+
+  For macOS enterprise force-install, pair this with the
+  ExtensionInstallForcelist policy (see enterprise/com.google.Chrome.plist).
 
   Reference: https://developer.chrome.com/docs/extensions/how-to/distribute/host-on-linux
 -->
 <gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
-  <app appid='mdagnhgcaahpijdbikbockbjjcocabel'>
-    <updatecheck codebase='https://blocked.palsplan.app/palsplan-web-protector.crx' version='3.0.0' />
+  <app appid='lmaaddldfngeapalhdhgbeeipbjalioe'>
+    <updatecheck codebase='https://blocked.palsplan.app/palsplan-web-protector.crx' version='3.7.5' />
   </app>
 </gupdate>
