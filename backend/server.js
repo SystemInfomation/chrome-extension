@@ -33,6 +33,9 @@ const MAX_ACTIVITY_SIZE = 10_000;
 /** Maximum number of alert entries kept in memory. */
 const MAX_ALERT_SIZE = 1_000;
 
+/** Number of recent activity entries sent to a dashboard on initial connection. */
+const MAX_HISTORY_ENTRIES = 50;
+
 /** How often (ms) to persist activity data to disk. */
 const PERSIST_INTERVAL_MS = 30_000;
 
@@ -351,7 +354,7 @@ wss.on("connection", (ws, req) => {
     // Send current extension status to the newly-connected dashboard immediately
     ws.send(JSON.stringify({ type: "status", status: extensionConnected ? "online" : "offline" }));
     // Send recent activity history so the live feed isn't empty on load
-    const recent = activityLog.slice(-50).reverse(); // last 50 entries, newest first
+    const recent = activityLog.slice(-MAX_HISTORY_ENTRIES).reverse(); // newest first
     if (recent.length > 0) {
       ws.send(JSON.stringify({ type: "history", entries: recent }));
     }
