@@ -347,6 +347,14 @@ wss.on("connection", (ws, req) => {
     if (customFilters.size > 0) {
       ws.send(JSON.stringify({ type: "filters_sync", filters: Array.from(customFilters) }));
     }
+  } else {
+    // Send current extension status to the newly-connected dashboard immediately
+    ws.send(JSON.stringify({ type: "status", status: extensionConnected ? "online" : "offline" }));
+    // Send recent activity history so the live feed isn't empty on load
+    const recent = activityLog.slice(-50).reverse(); // last 50 entries, newest first
+    if (recent.length > 0) {
+      ws.send(JSON.stringify({ type: "history", entries: recent }));
+    }
   }
 
   ws.on("message", (data) => {
