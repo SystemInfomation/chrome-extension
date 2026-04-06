@@ -92,6 +92,11 @@ export function MonitorProvider({ children }) {
         if (msg.entry.action === "blocked") {
           setAlertCount((n) => n + 1);
         }
+      } else if (msg.type === "history" && Array.isArray(msg.entries)) {
+        setLiveEntries((prev) => {
+          if (prev.length > 0) return prev; // already have live data — don't overwrite
+          return msg.entries.slice(0, MAX_LIVE_ENTRIES);
+        });
       } else if (msg.type === "status") {
         setExtOnline(msg.status === "online");
       } else if (msg.type === "screenshot" && msg.data) {
