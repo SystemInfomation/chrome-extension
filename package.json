@@ -1,13 +1,13 @@
 {
-  "name": "palsplan-web-protector-extension",
+  "name": "watson-control-tower-extension",
   "version": "1.0.0",
-  "description": "PalsPlan Web Protector — Chrome extension build toolchain",
+  "description": "Watson Control Tower — Chrome extension build toolchain",
   "private": true,
   "scripts": {
     "build": "webpack --config webpack.config.js",
     "build:dev": "webpack --config webpack.config.js --mode development",
     "lint": "eslint extension/background.js webpack.config.js",
-    "pack": "npm run build && cd extension && zip -r ../palsplan-web-protector.zip ."
+    "pack": "npm run build && cd extension && zip -r ../watson-control-tower.zip ."
   },
   "dependencies": {
     "link-shield": "^1.0.0",

@@ -1,7 +1,7 @@
 {
-  "name": "palsplan-parental-dashboard",
+  "name": "watson-control-tower-dashboard",
   "version": "1.0.0",
-  "description": "PalsPlan Parental Monitor — parent dashboard (React + Next.js)",
+  "description": "Watson Control Tower — parent dashboard (React + Next.js)",
   "private": true,
   "scripts": {
     "dev": "next dev",

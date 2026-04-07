@@ -118,9 +118,9 @@ frame-ancestors 'none'
 
 ### 8. CRX Hosting Configuration
 **Setup**: 
-- CRX file hosted at: `https://blocked.palsplan.app/palsplan-web-protector.crx`
-- Update manifest at: `https://blocked.palsplan.app/updates.xml`
-- Extension ID: `mdagnhgcaahpijdbikbockbjjcocabel`
+- CRX file hosted at: `https://blocked.Watsons.app/watson-control-tower.crx`
+- Update manifest at: `https://blocked.Watsons.app/updates.xml`
+- Extension ID: `lmaaddldfngeapalhdhgbeeipbjalioe`
 
 ## Security Verification
 
@@ -140,7 +140,7 @@ frame-ancestors 'none'
 ✅ `mail.google.com` - ALLOWED
 ✅ `youtube.com` - ALLOWED
 ✅ `github.com` - ALLOWED
-✅ `blocked.palsplan.app` - ALLOWED
+✅ `blocked.Watsons.app` - ALLOWED
 ❌ `g00gle.com` - BLOCKED (typosquatting)
 ❌ `pornhub.com` - BLOCKED (adult content)
 ❌ `malicious-site.xyz` - BLOCKED (suspicious TLD)

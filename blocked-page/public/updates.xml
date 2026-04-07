@@ -1,8 +1,8 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!--
-  Chrome extension update manifest for Watson Estates.
+  Chrome extension update manifest for Watson Control Tower.
 
-  Hosted at: https://blocked.palsplan.app/updates.xml
+  Hosted at: https://blocked.Watsons.app/updates.xml
 
   This is the LIVE copy served by the blocked-page site. Keep it in sync
   with extension/updates.xml whenever the version bumps.
@@ -14,6 +14,6 @@
 -->
 <gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
   <app appid='lmaaddldfngeapalhdhgbeeipbjalioe'>
-    <updatecheck codebase='https://blocked.palsplan.app/palsplan-web-protector.crx' version='3.7.5' />
+    <updatecheck codebase='https://blocked.Watsons.app/watson-control-tower.crx' version='3.7.5' />
   </app>
 </gupdate>

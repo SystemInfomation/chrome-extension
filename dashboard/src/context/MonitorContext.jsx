@@ -29,7 +29,7 @@ import {
 
 /** Default backend URL — pre-configured for this deployment. */
 const DEFAULT_BACKEND_URL = "https://chrome-extension-lwck.onrender.com";
-const STORAGE_KEY = "palsplan_backend_url";
+const STORAGE_KEY = "watson_ct_backend_url";
 const MAX_LIVE_ENTRIES = 500;
 
 const MonitorContext = createContext(null);

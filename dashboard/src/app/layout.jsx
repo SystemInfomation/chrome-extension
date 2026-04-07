@@ -3,7 +3,7 @@ import { MonitorProvider } from "../context/MonitorContext";
 import Sidebar from "../components/Sidebar";
 
 export const metadata = {
-  title: "PalsPlan — Parental Monitor",
+  title: "Watson Control Tower — Parental Monitor",
   description: "Real-time parental monitoring dashboard",
 };
 

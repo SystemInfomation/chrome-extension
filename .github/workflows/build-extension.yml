@@ -26,14 +26,14 @@ jobs:
       - name: Upload extension zip
         uses: actions/upload-artifact@v4
         with:
-          name: palsplan-web-protector
-          path: palsplan-web-protector.zip
+          name: watson-control-tower
+          path: watson-control-tower.zip
 
       - name: Publish extension to GitHub Releases
         run: |
-          gh release create "build-${{ github.run_number }}" palsplan-web-protector.zip \
+          gh release create "build-${{ github.run_number }}" watson-control-tower.zip \
             --title "Latest Build" \
-            --notes "Pre-built extension ZIP. Download \`palsplan-web-protector.zip\`, then load it as an unpacked extension in Chrome (\`chrome://extensions\` → Enable Developer mode → Load unpacked → select the unzipped folder)." \
+            --notes "Pre-built extension ZIP. Download \`watson-control-tower.zip\`, then load it as an unpacked extension in Chrome (\`chrome://extensions\` → Enable Developer mode → Load unpacked → select the unzipped folder)." \
             --latest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

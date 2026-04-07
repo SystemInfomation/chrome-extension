@@ -1,5 +1,5 @@
 /**
- * PalsPlan Parental Monitor — Backend Server
+ * Watson Control Tower — Backend Server
  *
  * Node.js + Express + WebSocket (ws) server for real-time parental monitoring.
  * Deployed on Render.com as a Web Service.
@@ -65,10 +65,10 @@ if (process.env.DATABASE_URL) {
     connectionTimeoutMillis: 5_000,
   });
   db.on("error", (err) => {
-    console.error("[PalsPlan DB] Pool error:", err.message);
+    console.error("[WatsonCT DB] Pool error:", err.message);
   });
 } else {
-  console.warn("[PalsPlan] DATABASE_URL not set — data will not be persisted across restarts.");
+  console.warn("[WatsonCT] DATABASE_URL not set — data will not be persisted across restarts.");
 }
 
 /**
@@ -105,9 +105,9 @@ async function initDb() {
         domain TEXT PRIMARY KEY
       );
     `);
-    console.log("[PalsPlan DB] Schema ready.");
+    console.log("[WatsonCT DB] Schema ready.");
   } catch (err) {
-    console.error("[PalsPlan DB] Failed to initialise schema:", err.message);
+    console.error("[WatsonCT DB] Failed to initialise schema:", err.message);
   }
 }
 
@@ -201,7 +201,7 @@ function dbInsertActivity(entry) {
      VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (id) DO NOTHING`,
     [entry.id, entry.url, entry.title, entry.action, entry.reason, entry.timestamp, entry.domain]
-  ).catch((err) => console.error("[PalsPlan DB] insert activity:", err.message));
+  ).catch((err) => console.error("[WatsonCT DB] insert activity:", err.message));
 }
 
 /** Persist a single alert entry to the database (fire-and-forget). */
@@ -212,7 +212,7 @@ function dbInsertAlert(alert) {
      VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (id) DO NOTHING`,
     [alert.id, alert.url, alert.domain, alert.reason, alert.timestamp, alert.severity]
-  ).catch((err) => console.error("[PalsPlan DB] insert alert:", err.message));
+  ).catch((err) => console.error("[WatsonCT DB] insert alert:", err.message));
 }
 
 /**
@@ -223,9 +223,9 @@ async function loadFiltersFromDb() {
   try {
     const { rows } = await db.query("SELECT domain FROM custom_filters");
     customFilters = new Set(rows.map((r) => r.domain));
-    console.log(`[PalsPlan DB] Loaded ${customFilters.size} custom filters.`);
+    console.log(`[WatsonCT DB] Loaded ${customFilters.size} custom filters.`);
   } catch (err) {
-    console.error("[PalsPlan DB] load filters:", err.message);
+    console.error("[WatsonCT DB] load filters:", err.message);
   }
 }
 
@@ -235,7 +235,7 @@ function dbAddFilter(domain) {
   db.query(
     "INSERT INTO custom_filters (domain) VALUES ($1) ON CONFLICT DO NOTHING",
     [domain]
-  ).catch((err) => console.error("[PalsPlan DB] add filter:", err.message));
+  ).catch((err) => console.error("[WatsonCT DB] add filter:", err.message));
 }
 
 /** Persist a filter removal to the database (fire-and-forget). */
@@ -244,7 +244,7 @@ function dbRemoveFilter(domain) {
   db.query(
     "DELETE FROM custom_filters WHERE domain = $1",
     [domain]
-  ).catch((err) => console.error("[PalsPlan DB] remove filter:", err.message));
+  ).catch((err) => console.error("[WatsonCT DB] remove filter:", err.message));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -368,7 +368,7 @@ app.get("/api/activity", rateLimitMiddleware, async (req, res) => {
         items: rowsRes.rows,
       });
     } catch (err) {
-      console.error("[PalsPlan DB] GET /api/activity:", err.message);
+      console.error("[WatsonCT DB] GET /api/activity:", err.message);
       return res.status(500).json({ error: "database error" });
     }
   }
@@ -431,7 +431,7 @@ app.get("/api/activity/stats", rateLimitMiddleware, async (_req, res) => {
         topDomains:   domRes.rows.map((r) => ({ domain: r.domain, count: parseInt(r.cnt, 10) })),
       });
     } catch (err) {
-      console.error("[PalsPlan DB] GET /api/activity/stats:", err.message);
+      console.error("[WatsonCT DB] GET /api/activity/stats:", err.message);
       return res.status(500).json({ error: "database error" });
     }
   }
@@ -478,7 +478,7 @@ app.get("/api/alerts", rateLimitMiddleware, async (req, res) => {
         items: rowsRes.rows,
       });
     } catch (err) {
-      console.error("[PalsPlan DB] GET /api/alerts:", err.message);
+      console.error("[WatsonCT DB] GET /api/alerts:", err.message);
       return res.status(500).json({ error: "database error" });
     }
   }
@@ -530,7 +530,7 @@ app.delete("/api/filters/:domain", (req, res) => {
 });
 
 // Health check
-app.get("/", (_req, res) => res.json({ status: "ok", service: "PalsPlan Parental Monitor" }));
+app.get("/", (_req, res) => res.json({ status: "ok", service: "Watson Control Tower Monitor" }));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HTTP + WebSocket server
@@ -567,7 +567,7 @@ wss.on("connection", (ws, req) => {
   const role = url.searchParams.get("role") === "extension" ? "extension" : "dashboard";
   clients.set(ws, { role });
 
-  console.log(`[PalsPlan WS] ${role} connected (${clients.size} total)`);
+  console.log(`[WatsonCT WS] ${role} connected (${clients.size} total)`);
 
   if (role === "extension") {
     extensionConnected = true;
@@ -676,11 +676,11 @@ wss.on("connection", (ws, req) => {
       // Extension is gone — tell dashboards the screen stream has stopped
       broadcast({ type: "screen_stream_stopped" }, "dashboard");
     }
-    console.log(`[PalsPlan WS] ${role} disconnected (${clients.size} remaining)`);
+    console.log(`[WatsonCT WS] ${role} disconnected (${clients.size} remaining)`);
   });
 
   ws.on("error", (err) => {
-    console.error(`[PalsPlan WS] ${role} error:`, err.message);
+    console.error(`[WatsonCT WS] ${role} error:`, err.message);
   });
 });
 
@@ -694,9 +694,9 @@ async function start() {
   await loadFiltersFromDb();
 
   server.listen(PORT, () => {
-    console.log(`[PalsPlan] Server listening on port ${PORT}`);
-    console.log(`[PalsPlan] WebSocket endpoint: ws://localhost:${PORT}/ws`);
-    console.log(`[PalsPlan] Database: ${db ? "PostgreSQL" : "in-memory (no DATABASE_URL)"}`);
+    console.log(`[WatsonCT] Server listening on port ${PORT}`);
+    console.log(`[WatsonCT] WebSocket endpoint: ws://localhost:${PORT}/ws`);
+    console.log(`[WatsonCT] Database: ${db ? "PostgreSQL" : "in-memory (no DATABASE_URL)"}`);
   });
 }
 

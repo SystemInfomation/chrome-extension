@@ -1,5 +1,5 @@
 /**
- * PalsPlan Web Protector — popup script
+ * Watson Control Tower — popup script
  *
  * Fetches protection statistics from the background service worker and
  * renders them in the popup UI.
@@ -103,7 +103,7 @@
   chrome.runtime.sendMessage({ type: "GET_STATS" }, (response) => {
     if (chrome.runtime.lastError) {
       // Service worker may be sleeping; show a graceful fallback
-      console.warn("[PalsPlan popup] Could not reach background:", chrome.runtime.lastError.message);
+      console.warn("[WatsonCT popup] Could not reach background:", chrome.runtime.lastError.message);
       const upd = document.getElementById("blocklist-updated");
       if (upd) upd.textContent = "Waking up…";
       // Retry once after a short delay to let the service worker start
