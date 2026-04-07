@@ -49,7 +49,7 @@ function safeDecode(value) {
 }
 
 /**
- * App — root component for the PalsPlan Web Protector blocked page.
+ * App — root component for the Watson Control Tower blocked page.
  * Linewize-inspired light theme.
  *
  * Reads query-string parameters injected by the Chrome extension:
@@ -119,14 +119,14 @@ export default function App() {
     <div className="page">
       {/* ── Top Navigation Bar ── */}
       <nav className="navbar">
-        <a href="https://palsplan.app" className="navbar-brand" tabIndex={0} aria-label="PalsPlan Web Protector home">
+        <a href="https://Watsons.app" className="navbar-brand" tabIndex={0} aria-label="Watson Control Tower home">
           <img
             src="/secured.png"
-            alt="PalsPlan logo"
+            alt="Watson Control Tower logo"
             className="navbar-logo"
           />
           <div className="navbar-name">
-            PalsPlan
+            Watson Control Tower
             <span>Web Protection</span>
           </div>
         </a>
@@ -215,20 +215,20 @@ export default function App() {
 
             {/* ── Secured Badge ── */}
             <div className="secured-badge">
-              <img src="/secured.png" alt="PalsPlan Secured" />
-              Secured by PalsPlan
+              <img src="/secured.png" alt="Watson Control Tower Secured" />
+              Secured by Watson Control Tower
             </div>
 
             {/* ── Contact ── */}
             <p className="contact-text">
-              Contact <strong>PalsPlan IT</strong> via{" "}
-              <a href="mailto:blocked@palsplan.app" className="email-link">
-                blocked@palsplan.app
+              Contact <strong>Watson Control Tower IT</strong> via{" "}
+              <a href="mailto:blocked@Watsons.app" className="email-link">
+                blocked@Watsons.app
               </a>
             </p>
 
             {/* ── Footer ── */}
-            <p className="footer-brand">PalsPlan Web Protector</p>
+            <p className="footer-brand">Watson Control Tower</p>
           </div>
         </div>
       </div>

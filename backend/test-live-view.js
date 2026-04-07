@@ -1,5 +1,5 @@
 /**
- * End-to-end test for the PalsPlan live view system.
+ * End-to-end test for the Watson Control Tower live view system.
  *
  * Spawns the real server.js as a child process (no DATABASE_URL → in-memory
  * mode), then simulates:
@@ -94,7 +94,7 @@ function collectMessages(ws, count, timeoutMs = 4000) {
 }
 
 async function run() {
-  console.log("\n=== PalsPlan Live View End-to-End Test ===\n");
+  console.log("\n=== Watson Control Tower Live View End-to-End Test ===\n");
 
   // ── 1. Start the server ──────────────────────────────────────────────────
   console.log("Starting backend server on port", PORT, "...");

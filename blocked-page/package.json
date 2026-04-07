@@ -1,7 +1,7 @@
 {
-  "name": "palsplan-blocked-page",
+  "name": "watson-control-tower-blocked-page",
   "version": "1.0.0",
-  "description": "PalsPlan Web Protector — blocked page UI (React + Vite)",
+  "description": "Watson Control Tower — blocked page UI (React + Vite)",
   "private": true,
   "type": "module",
   "scripts": {

@@ -1,5 +1,5 @@
 /**
- * PalsPlan Web Protector — background service worker (Family-Safe Mode)
+ * Watson Control Tower — background service worker (Family-Safe Mode)
  *
  * Family-safe filtering: allows all general browsing, video games, streaming,
  * social media, etc. Only blocks:
@@ -17,7 +17,7 @@
  *   - AdGuard SpywareFilter (spyware/malware domains)
  *
  * When a URL is blocked the tab is redirected to the hosted blocked page at
- * https://blocked.palsplan.app with the original URL and block reason encoded
+ * https://blocked.Watsons.app with the original URL and block reason encoded
  * as query-string parameters.
  *
  * This extension works as a normal Chrome extension and does not require
@@ -31,7 +31,7 @@ import { detectSuspiciousLink } from "link-shield";
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Blocked-page URL (must be internet-accessible and HTTPS). */
-const BLOCKED_PAGE_BASE = "https://blocked.palsplan.app";
+const BLOCKED_PAGE_BASE = "https://blocked.Watsons.app";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Monitoring Configuration — change this to your Render.com URL after deploy
@@ -40,7 +40,7 @@ const BLOCKED_PAGE_BASE = "https://blocked.palsplan.app";
 /**
  * WebSocket endpoint for the parental monitoring backend.
  * Replace with your actual Render.com URL, e.g.:
- *   "wss://palsplan-monitor.onrender.com/ws"
+ *   "wss://watsons-monitor.onrender.com/ws"
  */
 const MONITOR_WS_URL = "wss://chrome-extension-lwck.onrender.com/ws";
 
@@ -55,7 +55,7 @@ const WS_MAX_BACKOFF_MS = 30_000;
  * The extension checks this URL for new versions and notifies users.
  */
 const GITHUB_RELEASES_URL = "https://api.github.com/repos/SystemInfomation/cdn-hosting/releases/latest";
-const GITHUB_DOWNLOAD_URL = "https://github.com/SystemInfomation/cdn-hosting/releases/latest/download/palsplan-web-protector.zip";
+const GITHUB_DOWNLOAD_URL = "https://github.com/SystemInfomation/cdn-hosting/releases/latest/download/watson-control-tower.zip";
 
 /**
  * Update check interval in seconds.
@@ -160,7 +160,7 @@ function stopScreenStream() {
  */
 function connectMonitorWs() {
   if (!MONITOR_WS_URL || MONITOR_WS_URL.trim() === "") {
-    console.warn("[PalsPlan] Monitoring disabled: MONITOR_WS_URL is not set.");
+    console.warn("[WatsonCT] Monitoring disabled: MONITOR_WS_URL is not set.");
     return;
   }
 
@@ -298,8 +298,8 @@ function persistCustomFilters() {
  */
 const WHITELIST = new Set([
   // Own domains
-  "palsplan.app",
-  "blocked.palsplan.app",
+  "Watsons.app",
+  "blocked.Watsons.app",
   
   // Google services
   "google.com",
@@ -546,7 +546,7 @@ const UNSAFE_REGEX = new RegExp(
 
 /**
  * Returns true if the given hostname (or any parent domain) is in the whitelist.
- * e.g. "sub.palsplan.app" matches "palsplan.app"
+ * e.g. "sub.Watsons.app" matches "Watsons.app"
  *
  * @param {string} hostname
  * @returns {boolean}
@@ -607,7 +607,7 @@ async function loadLocalBlocklist() {
   try {
     const response = await fetch(chrome.runtime.getURL("blocklist.gz"));
     if (!response.ok || !response.body) {
-      console.error("[PalsPlan] Could not fetch bundled blocklist:", response.status);
+      console.error("[WatsonCT] Could not fetch bundled blocklist:", response.status);
       return;
     }
 
@@ -643,7 +643,7 @@ async function loadLocalBlocklist() {
 
     urlDecisionCache.clear();
     const size = BLOCKLIST_DOMAINS.size;
-    console.warn(`[PalsPlan] Bundled blocklist loaded: ${size.toLocaleString()} domains`);
+    console.warn(`[WatsonCT] Bundled blocklist loaded: ${size.toLocaleString()} domains`);
 
     // Store metadata so the popup can display blocklist size and load time
     await chrome.storage.local.set({
@@ -651,7 +651,7 @@ async function loadLocalBlocklist() {
       blocklistUpdatedAt: Date.now(),
     });
   } catch (err) {
-    console.error("[PalsPlan] Failed to load bundled blocklist:", err);
+    console.error("[WatsonCT] Failed to load bundled blocklist:", err);
   }
 }
 
@@ -752,7 +752,7 @@ function evaluate(url) {
       }
     } catch (err) {
       // link-shield errors (e.g. malformed URL) must not block navigation
-      console.warn("[PalsPlan] link-shield error for", url, err);
+      console.warn("[WatsonCT] link-shield error for", url, err);
       decision = { blocked: false, reason: "" };
     }
   }
@@ -900,7 +900,7 @@ async function checkForUpdates() {
       method: "GET",
       headers: {
         "Accept": "application/vnd.github+json",
-        "User-Agent": "PalsPlan-Web-Protector"
+        "User-Agent": "Watson-Control-Tower"
       },
       // Use cache with a reasonable max-age to avoid rate limits
       cache: "default"
@@ -965,7 +965,7 @@ function compareVersions(v1, v2) {
 function notifyUpdate(version, downloadUrl) {
   chrome.notifications.create({
     type: "basic",
-    title: "PalsPlan Web Protector Update Available",
+    title: "Watson Control Tower Update Available",
     message: `Version ${version} is available. Click to download.`,
     priority: 2,
     requireInteraction: true,
@@ -1147,7 +1147,7 @@ chrome.management.onDisabled.addListener((info) => {
     // Note: Service worker will be terminated, so this may not always work
     chrome.notifications.create({
       type: "basic",
-      title: "PalsPlan Web Protector Disabled",
+      title: "Watson Control Tower Disabled",
       message: "Warning: Web protection has been disabled. Your browsing is no longer protected.",
       priority: 2,
       requireInteraction: true

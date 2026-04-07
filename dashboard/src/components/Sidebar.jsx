@@ -36,7 +36,7 @@ export default function Sidebar() {
           <Shield size={18} strokeWidth={2.5} />
         </div>
         <div>
-          <div className={styles.logoTitle}>PalsPlan</div>
+          <div className={styles.logoTitle}>Watson CT</div>
           <div className={styles.logoSub}>Parent Monitor</div>
         </div>
       </div>

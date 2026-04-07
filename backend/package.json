@@ -1,7 +1,7 @@
 {
-  "name": "palsplan-parental-monitor-backend",
+  "name": "watson-control-tower-backend",
   "version": "1.0.0",
-  "description": "PalsPlan Parental Monitor — backend server (Express + WebSocket)",
+  "description": "Watson Control Tower — backend server (Express + WebSocket)",
   "private": true,
   "main": "server.js",
   "scripts": {

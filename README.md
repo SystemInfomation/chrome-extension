@@ -1,7 +1,7 @@
-# PalsPlan Web Protector
+# Watson Control Tower
 
 [![Build & Package Extension](https://github.com/SystemInfomation/cdn-hosting/actions/workflows/build-extension.yml/badge.svg)](https://github.com/SystemInfomation/cdn-hosting/actions/workflows/build-extension.yml)
-[![Download Extension ZIP](https://img.shields.io/badge/Download-Extension%20ZIP-blue?style=flat&logo=googlechrome)](https://github.com/SystemInfomation/cdn-hosting/releases/latest/download/palsplan-web-protector.zip)
+[![Download Extension ZIP](https://img.shields.io/badge/Download-Extension%20ZIP-blue?style=flat&logo=googlechrome)](https://github.com/SystemInfomation/cdn-hosting/releases/latest/download/watson-control-tower.zip)
 
 Chrome extension + hosted blocked page that protects users from insecure connections, adult content, gaming websites, personal/social media, and malicious/suspicious websites. Works as a normal Chrome extension without requiring enterprise enrollment or special policies.
 
@@ -10,7 +10,7 @@ Chrome extension + hosted blocked page that protects users from insecure connect
 ## Repository Structure
 
 ```
-palsplan-web-protector/
+watson-control-tower/
 ├── extension/
 │   ├── manifest.json          Chrome extension manifest (MV3)
 │   ├── background.js          Service worker source — filtering + WS monitoring
@@ -66,7 +66,7 @@ palsplan-web-protector/
 | Adult detection | Single compiled `RegExp` over the URL | ~50 ns per check |
 | Malware detection | [link-shield](https://github.com/HamzaMohammed89/link-shield) — fully offline heuristics | No external API calls |
 | Result caching | In-memory `Map` (LRU-style, max 500 entries) | Zero-latency repeat navigations |
-| Blocked page | React + Vite SPA at `https://blocked.palsplan.app` | Parses `?blockedUrl=` and `?reason=` |
+| Blocked page | React + Vite SPA at `https://blocked.Watsons.app` | Parses `?blockedUrl=` and `?reason=` |
 | Auto-updates | GitHub Releases API + chrome.alarms | Checks daily for new versions |
 | Bypass prevention | Multiple security layers | Back button protection, history tracking, incognito support |
 | Distribution | Chrome Web Store or self-hosted | Works as a normal extension |
@@ -89,7 +89,7 @@ The extension includes multiple layers of protection to prevent users from bypas
 
 ### Blocked Page Security
 
-The blocked page at `https://blocked.palsplan.app` includes enterprise-grade security:
+The blocked page at `https://blocked.Watsons.app` includes enterprise-grade security:
 
 1. **Content Security Policy (CSP)** — Strict CSP headers prevent XSS attacks and unauthorized script execution
 2. **Input Sanitization** — All URL parameters are sanitized to prevent XSS and injection attacks
@@ -151,9 +151,9 @@ The webpack bundle is written to `extension/dist/background.bundle.js` (~9 KB mi
    ```bash
    npm run pack
    ```
-   This runs `npm run build` first (producing `extension/dist/background.bundle.js`) and then creates `palsplan-web-protector.zip` with `manifest.json` at the zip root, ready for upload.
+   This runs `npm run build` first (producing `extension/dist/background.bundle.js`) and then creates `watson-control-tower.zip` with `manifest.json` at the zip root, ready for upload.
 
-   > **Tip — no local toolchain?** Click the **Build & Package Extension** badge above → open the latest run → click **Run workflow**. Once it completes, download `palsplan-web-protector` from the **Artifacts** section.
+   > **Tip — no local toolchain?** Click the **Build & Package Extension** badge above → open the latest run → click **Run workflow**. Once it completes, download `watson-control-tower` from the **Artifacts** section.
 2. Go to the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole)
 3. Click **Add new item** → upload the `.zip`
 4. Set **Visibility** to **Public** or **Unlisted** depending on your needs
@@ -194,8 +194,8 @@ npm run build      # outputs to blocked-page/dist/
    | **Build Command** | `npm install && npm run build` |
    | **Publish Directory** | `dist` |
 
-5. Set the custom domain to `blocked.palsplan.app` in the **Custom Domains** tab
-6. Add a DNS CNAME record: `blocked.palsplan.app` → `<your-render-service>.onrender.com`
+5. Set the custom domain to `blocked.Watsons.app` in the **Custom Domains** tab
+6. Add a DNS CNAME record: `blocked.Watsons.app` → `<your-render-service>.onrender.com`
 
 ### Deploy to Vercel (alternative)
 
@@ -236,7 +236,7 @@ dashboard/ — React + Next.js        (hosted on Vercel)
    | **Start Command** | `npm start`              |
    | **Environment**  | Node                      |
 
-4. After deploy you'll get a URL like `https://palsplan-monitor.onrender.com`
+4. After deploy you'll get a URL like `https://watsons-monitor.onrender.com`
 
 > Render.com free tier spins down after 15 minutes of inactivity. The extension sends a heartbeat every 30 seconds to keep the service alive.
 
@@ -246,13 +246,13 @@ Open `extension/background.js` and change the constant near the top:
 
 ```js
 // Change this to your Render.com URL:
-const MONITOR_WS_URL = "wss://palsplan-monitor.onrender.com/ws";
+const MONITOR_WS_URL = "wss://watsons-monitor.onrender.com/ws";
 ```
 
 Then rebuild and reinstall the extension:
 ```bash
 npm run build
-npm run pack   # creates palsplan-web-protector.zip
+npm run pack   # creates watson-control-tower.zip
 ```
 
 ### Step 3 — Deploy the Dashboard to Vercel
@@ -301,9 +301,9 @@ plain `.zip`).
 npm run build
 
 # Use Chrome's built-in packer (headless):
-google-chrome --pack-extension=extension/ --pack-extension-key=palsplan-webprotector.pem
+google-chrome --pack-extension=extension/ --pack-extension-key=watson-control-tower.pem
 # Output: extension.crx  (named after the directory)
-#         palsplan-webprotector.pem  (created from the --pack-extension-key value on first run)
+#         watson-control-tower.pem  (created from the --pack-extension-key value on first run)
 ```
 
 > On first run Chrome generates the `.pem` file at the path you specified with
@@ -312,13 +312,13 @@ google-chrome --pack-extension=extension/ --pack-extension-key=palsplan-webprote
 
 ### 2 — Host the `.crx` and update manifest
 
-The `updates.xml` file is included in `blocked-page/public/updates.xml` and will be automatically hosted at `https://blocked.palsplan.app/updates.xml` when you deploy the blocked page.
+The `updates.xml` file is included in `blocked-page/public/updates.xml` and will be automatically hosted at `https://blocked.Watsons.app/updates.xml` when you deploy the blocked page.
 
-The `.crx` file should also be hosted at `https://blocked.palsplan.app/palsplan-web-protector.crx`.
+The `.crx` file should also be hosted at `https://blocked.Watsons.app/watson-control-tower.crx`.
 
 The `updates.xml` is already configured with:
-- Extension ID: `mdagnhgcaahpijdbikbockbjjcocabel`
-- CRX URL: `https://blocked.palsplan.app/palsplan-web-protector.crx`
+- Extension ID: `lmaaddldfngeapalhdhgbeeipbjalioe`
+- CRX URL: `https://blocked.Watsons.app/watson-control-tower.crx`
 - Version: `1.0.0`
 
 To update the version for a new release, edit both `extension/manifest.json` and `blocked-page/public/updates.xml` to match.
@@ -337,7 +337,7 @@ To update the version for a new release, edit both `extension/manifest.json` and
 **For enterprise deployment (optional):**
 If you want to force-install the extension on managed devices, you can use Chrome enterprise policies with the update URL:
 ```
-<EXTENSION_ID>;https://blocked.palsplan.app/updates.xml
+<EXTENSION_ID>;https://blocked.Watsons.app/updates.xml
 ```
 
 See the [Chrome Enterprise documentation](https://support.google.com/chrome/a/answer/9296680) for more details on enterprise deployment.
@@ -349,7 +349,7 @@ See the [Chrome Enterprise documentation](https://support.google.com/chrome/a/an
 After installing the extension:
 
 1. Open `chrome://extensions` — you should see the extension listed
-2. Navigate to `http://pornhub.com` or a suspicious URL — you should be redirected to `https://blocked.palsplan.app`
+2. Navigate to `http://pornhub.com` or a suspicious URL — you should be redirected to `https://blocked.Watsons.app`
 
 ---
 

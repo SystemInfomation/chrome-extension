@@ -5,7 +5,7 @@
   macOS Chrome Enterprise Policy — Force-Install Extension
   =========================================================
 
-  This plist force-installs the Watson Estates Chrome extension on
+  This plist force-installs the Watson Control Tower Chrome extension on
   managed Macs using Google Chrome enterprise policies.
 
   WHAT IT DOES:
@@ -19,8 +19,8 @@
 
   EXTENSION DETAILS:
     - Extension ID:  lmaaddldfngeapalhdhgbeeipbjalioe
-    - Update URL:    https://blocked.palsplan.app/updates.xml
-    - CRX hosted at: https://blocked.palsplan.app/palsplan-web-protector.crx
+    - Update URL:    https://blocked.Watsons.app/updates.xml
+    - CRX hosted at: https://blocked.Watsons.app/watson-control-tower.crx
 
   HOW TO DEPLOY:
     1. Copy this file to:
@@ -69,7 +69,7 @@
   -->
   <key>ExtensionInstallForcelist</key>
   <array>
-    <string>lmaaddldfngeapalhdhgbeeipbjalioe;https://blocked.palsplan.app/updates.xml</string>
+    <string>lmaaddldfngeapalhdhgbeeipbjalioe;https://blocked.Watsons.app/updates.xml</string>
   </array>
 
 </dict>
