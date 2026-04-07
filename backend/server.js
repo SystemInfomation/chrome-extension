@@ -9,17 +9,21 @@
  *  - Parent dashboard connects to /ws and receives real-time activity events
  *  - REST API provides activity history, stats, alerts, and filter management
  *
+ * Persistence:
+ *  - When DATABASE_URL is set, all activity, alerts, and filters are stored in
+ *    PostgreSQL (durable across restarts, unlimited history).
+ *  - A small in-memory ring buffer (MAX_HISTORY_ENTRIES) is kept solely for
+ *    sending recent history to newly-connected dashboard clients over WebSocket.
+ *
  * No authentication — this is a private, single-family deployment.
- * Change DASHBOARD_ORIGIN in your .env to restrict CORS to your dashboard URL.
  */
 
 "use strict";
 
 const http    = require("http");
-const path    = require("path");
-const fs      = require("fs");
 const express = require("express");
 const { WebSocketServer } = require("ws");
+const { Pool } = require("pg");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Configuration
@@ -27,96 +31,107 @@ const { WebSocketServer } = require("ws");
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
 
-/** Maximum number of activity entries kept in memory. */
-const MAX_ACTIVITY_SIZE = 10_000;
-
-/** Maximum number of alert entries kept in memory. */
-const MAX_ALERT_SIZE = 1_000;
-
-/** Number of recent activity entries sent to a dashboard on initial connection. */
+/**
+ * Number of recent activity entries held in memory for the initial WS history
+ * broadcast sent to newly-connected dashboard clients.
+ */
 const MAX_HISTORY_ENTRIES = 50;
 
-/** How often (ms) to persist activity data to disk. */
-const PERSIST_INTERVAL_MS = 30_000;
-
-/** Path to the persistent activity data file. */
-const DATA_DIR  = path.join(__dirname, "data");
-const DATA_FILE = path.join(DATA_DIR, "activity.json");
-
 // ─────────────────────────────────────────────────────────────────────────────
-// In-memory storage
+// PostgreSQL
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** @type {Array<ActivityEntry>} */
-let activityLog = [];
+/**
+ * Connection pool. Initialised only when DATABASE_URL is present.
+ * @type {import("pg").Pool|null}
+ */
+let db = null;
 
-/** @type {Array<AlertEntry>} */
-let alertLog = [];
+if (process.env.DATABASE_URL) {
+  // Render-hosted (and most cloud) PostgreSQL instances use self-signed TLS
+  // certificates that Node.js cannot verify against its built-in CA bundle.
+  // `rejectUnauthorized: false` is the standard workaround for these providers.
+  // If you run Postgres locally or with a properly signed cert, you can remove
+  // the ssl option entirely.
+  const sslOption = /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL)
+    ? false
+    : { rejectUnauthorized: false };
 
-/** @type {Set<string>} Custom blocked domains (managed via API) */
-let customFilters = new Set();
+  db = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: sslOption,
+    max: 10,
+    idleTimeoutMillis: 30_000,
+    connectionTimeoutMillis: 5_000,
+  });
+  db.on("error", (err) => {
+    console.error("[PalsPlan DB] Pool error:", err.message);
+  });
+} else {
+  console.warn("[PalsPlan] DATABASE_URL not set — data will not be persisted across restarts.");
+}
 
-/** Whether the extension is currently connected. */
-let extensionConnected = false;
+/**
+ * Create the database schema if it does not already exist.
+ */
+async function initDb() {
+  if (!db) return;
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS activity (
+        id        TEXT PRIMARY KEY,
+        url       TEXT        NOT NULL DEFAULT '',
+        title     TEXT        NOT NULL DEFAULT '',
+        action    TEXT        NOT NULL CHECK (action IN ('visit', 'blocked')),
+        reason    TEXT,
+        timestamp BIGINT      NOT NULL,
+        domain    TEXT        NOT NULL DEFAULT ''
+      );
+      CREATE INDEX IF NOT EXISTS activity_timestamp_idx ON activity (timestamp DESC);
+      CREATE INDEX IF NOT EXISTS activity_action_idx    ON activity (action);
+      CREATE INDEX IF NOT EXISTS activity_domain_idx    ON activity (domain);
+
+      CREATE TABLE IF NOT EXISTS alerts (
+        id        TEXT PRIMARY KEY,
+        url       TEXT   NOT NULL DEFAULT '',
+        domain    TEXT   NOT NULL DEFAULT '',
+        reason    TEXT   NOT NULL DEFAULT 'Blocked',
+        timestamp BIGINT NOT NULL,
+        severity  TEXT   NOT NULL DEFAULT 'low'
+      );
+      CREATE INDEX IF NOT EXISTS alerts_timestamp_idx ON alerts (timestamp DESC);
+
+      CREATE TABLE IF NOT EXISTS custom_filters (
+        domain TEXT PRIMARY KEY
+      );
+    `);
+    console.log("[PalsPlan DB] Schema ready.");
+  } catch (err) {
+    console.error("[PalsPlan DB] Failed to initialise schema:", err.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// In-memory ring buffer (recent entries for WS history only)
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * @typedef {{ id: string, url: string, title: string, action: "visit"|"blocked", reason: string|null, timestamp: number, domain: string }} ActivityEntry
  * @typedef {{ id: string, url: string, domain: string, reason: string, timestamp: number, severity: string }} AlertEntry
  */
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Persistence
-// ─────────────────────────────────────────────────────────────────────────────
+/** @type {ActivityEntry[]} — newest entries at the end, capped at MAX_HISTORY_ENTRIES */
+const recentActivity = [];
 
-function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-}
+/** @type {AlertEntry[]} — newest alerts at the end, capped at MAX_ALERT_SIZE */
+const recentAlerts = [];
+const MAX_ALERT_SIZE = 500;
 
-function loadPersistedData() {
-  ensureDataDir();
-  try {
-    if (fs.existsSync(DATA_FILE)) {
-      const raw = fs.readFileSync(DATA_FILE, "utf8");
-      const parsed = JSON.parse(raw);
-      activityLog  = Array.isArray(parsed.activity) ? parsed.activity : [];
-      alertLog     = Array.isArray(parsed.alerts)   ? parsed.alerts   : [];
-      const filters = Array.isArray(parsed.filters)  ? parsed.filters  : [];
-      customFilters = new Set(filters);
-      console.log(`[PalsPlan] Loaded ${activityLog.length} activity entries from disk`);
-    }
-  } catch (err) {
-    console.error("[PalsPlan] Failed to load persisted data:", err.message);
-    activityLog  = [];
-    alertLog     = [];
-    customFilters = new Set();
-  }
-}
+/** @type {Set<string>} Custom blocked domains (managed via API) */
+let customFilters = new Set();
 
-function persistData() {
-  ensureDataDir();
-  try {
-    const payload = JSON.stringify({
-      activity: activityLog.slice(-MAX_ACTIVITY_SIZE),
-      alerts:   alertLog.slice(-MAX_ALERT_SIZE),
-      filters:  Array.from(customFilters),
-    });
-    fs.writeFileSync(DATA_FILE, payload, "utf8");
-  } catch (err) {
-    console.error("[PalsPlan] Failed to persist data:", err.message);
-  }
-}
-
-// Load persisted data on startup
-loadPersistedData();
-
-// Persist periodically
-setInterval(persistData, PERSIST_INTERVAL_MS);
-
-// Also persist on process exit
-process.on("SIGTERM", () => { persistData(); process.exit(0); });
-process.on("SIGINT",  () => { persistData(); process.exit(0); });
+/** Whether the extension is currently connected. */
+let extensionConnected = false;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -134,7 +149,6 @@ function extractDomain(url) {
   }
 }
 
-// Keywords used to classify block reason severity
 const SEVERITY_CRITICAL = ["adult", "malicious", "malware", "ransomware", "phishing"];
 const SEVERITY_HIGH     = ["vpn", "proxy"];
 const SEVERITY_MEDIUM   = ["blocklist", "family"];
@@ -152,6 +166,121 @@ function getSeverity(reason) {
   if (SEVERITY_MEDIUM.some((kw) => r.includes(kw)))   return "medium";
   return "low";
 }
+
+/**
+ * Append an entry to the in-memory ring buffer (newest at end).
+ * @param {ActivityEntry} entry
+ */
+function pushRecent(entry) {
+  recentActivity.push(entry);
+  if (recentActivity.length > MAX_HISTORY_ENTRIES) {
+    recentActivity.shift();
+  }
+}
+
+/**
+ * Append an alert to the in-memory ring buffer (newest at end).
+ * @param {AlertEntry} alert
+ */
+function pushRecentAlert(alert) {
+  recentAlerts.push(alert);
+  if (recentAlerts.length > MAX_ALERT_SIZE) {
+    recentAlerts.shift();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DB helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Persist a single activity entry to the database (fire-and-forget). */
+function dbInsertActivity(entry) {
+  if (!db) return;
+  db.query(
+    `INSERT INTO activity (id, url, title, action, reason, timestamp, domain)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (id) DO NOTHING`,
+    [entry.id, entry.url, entry.title, entry.action, entry.reason, entry.timestamp, entry.domain]
+  ).catch((err) => console.error("[PalsPlan DB] insert activity:", err.message));
+}
+
+/** Persist a single alert entry to the database (fire-and-forget). */
+function dbInsertAlert(alert) {
+  if (!db) return;
+  db.query(
+    `INSERT INTO alerts (id, url, domain, reason, timestamp, severity)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (id) DO NOTHING`,
+    [alert.id, alert.url, alert.domain, alert.reason, alert.timestamp, alert.severity]
+  ).catch((err) => console.error("[PalsPlan DB] insert alert:", err.message));
+}
+
+/**
+ * Load all custom filters from the database into the in-memory set.
+ */
+async function loadFiltersFromDb() {
+  if (!db) return;
+  try {
+    const { rows } = await db.query("SELECT domain FROM custom_filters");
+    customFilters = new Set(rows.map((r) => r.domain));
+    console.log(`[PalsPlan DB] Loaded ${customFilters.size} custom filters.`);
+  } catch (err) {
+    console.error("[PalsPlan DB] load filters:", err.message);
+  }
+}
+
+/** Persist a filter addition to the database (fire-and-forget). */
+function dbAddFilter(domain) {
+  if (!db) return;
+  db.query(
+    "INSERT INTO custom_filters (domain) VALUES ($1) ON CONFLICT DO NOTHING",
+    [domain]
+  ).catch((err) => console.error("[PalsPlan DB] add filter:", err.message));
+}
+
+/** Persist a filter removal to the database (fire-and-forget). */
+function dbRemoveFilter(domain) {
+  if (!db) return;
+  db.query(
+    "DELETE FROM custom_filters WHERE domain = $1",
+    [domain]
+  ).catch((err) => console.error("[PalsPlan DB] remove filter:", err.message));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Simple in-memory rate limiter
+// Limits each IP to MAX_REQUESTS within WINDOW_MS on protected routes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RATE_WINDOW_MS  = 60_000; // 1 minute
+const RATE_MAX        = 120;    // requests per window per IP
+
+/** @type {Map<string, { count: number, resetAt: number }>} */
+const rateCounts = new Map();
+
+function rateLimitMiddleware(req, res, next) {
+  const ip  = req.socket.remoteAddress || "unknown";
+  const now = Date.now();
+  let entry = rateCounts.get(ip);
+  if (!entry || now >= entry.resetAt) {
+    entry = { count: 0, resetAt: now + RATE_WINDOW_MS };
+    rateCounts.set(ip, entry);
+  }
+  entry.count++;
+  if (entry.count > RATE_MAX) {
+    res.setHeader("Retry-After", Math.ceil((entry.resetAt - now) / 1000));
+    return res.status(429).json({ error: "Too many requests. Please slow down." });
+  }
+  next();
+}
+
+// Periodically prune expired entries to prevent unbounded map growth
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of rateCounts.entries()) {
+    if (now >= entry.resetAt) rateCounts.delete(ip);
+  }
+}, RATE_WINDOW_MS);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Express app
@@ -174,16 +303,15 @@ app.get("/api/status", (_req, res) => {
   res.json({
     extensionConnected,
     uptime: process.uptime(),
-    activityCount: activityLog.length,
-    alertCount: alertLog.length,
+    dbConnected: db !== null,
   });
 });
 
 // ─── GET /api/activity ───────────────────────────────────────────────────────
-app.get("/api/activity", (req, res) => {
+app.get("/api/activity", rateLimitMiddleware, async (req, res) => {
   const {
-    page    = "1",
-    limit   = "50",
+    page   = "1",
+    limit  = "50",
     action,
     domain,
     search,
@@ -193,8 +321,60 @@ app.get("/api/activity", (req, res) => {
 
   const pageNum  = Math.max(1, parseInt(page, 10)  || 1);
   const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+  const offset   = (pageNum - 1) * limitNum;
 
-  let filtered = activityLog.slice().reverse(); // newest first
+  if (db) {
+    // ── PostgreSQL path ──────────────────────────────────────────────────────
+    try {
+      const conditions = [];
+      const params     = [];
+      let   p          = 1;
+
+      if (action === "blocked" || action === "visit") {
+        conditions.push(`action = $${p++}`); params.push(action);
+      }
+      if (domain) {
+        conditions.push(`domain ILIKE $${p++}`); params.push(`%${domain}%`);
+      }
+      if (search) {
+        conditions.push(`(url ILIKE $${p} OR title ILIKE $${p})`); params.push(`%${search}%`); p++;
+      }
+      if (from) {
+        const ts = new Date(from).getTime();
+        if (!isNaN(ts)) { conditions.push(`timestamp >= $${p++}`); params.push(ts); }
+      }
+      if (to) {
+        const ts = new Date(to).getTime();
+        if (!isNaN(ts)) { conditions.push(`timestamp <= $${p++}`); params.push(ts); }
+      }
+
+      const where = conditions.length ? "WHERE " + conditions.join(" AND ") : "";
+
+      const [countRes, rowsRes] = await Promise.all([
+        db.query(`SELECT COUNT(*) AS cnt FROM activity ${where}`, params),
+        db.query(
+          `SELECT id, url, title, action, reason, timestamp, domain
+             FROM activity ${where}
+            ORDER BY timestamp DESC
+            LIMIT $${p} OFFSET $${p + 1}`,
+          [...params, limitNum, offset]
+        ),
+      ]);
+
+      return res.json({
+        total: parseInt(countRes.rows[0].cnt, 10),
+        page:  pageNum,
+        limit: limitNum,
+        items: rowsRes.rows,
+      });
+    } catch (err) {
+      console.error("[PalsPlan DB] GET /api/activity:", err.message);
+      return res.status(500).json({ error: "database error" });
+    }
+  }
+
+  // ── In-memory fallback (no DB configured) ───────────────────────────────
+  let filtered = recentActivity.slice().reverse();
 
   if (action === "blocked" || action === "visit") {
     filtered = filtered.filter((e) => e.action === action);
@@ -219,24 +399,47 @@ app.get("/api/activity", (req, res) => {
   }
 
   const total = filtered.length;
-  const start = (pageNum - 1) * limitNum;
-  const items = filtered.slice(start, start + limitNum);
-
-  res.json({ total, page: pageNum, limit: limitNum, items });
+  const items = filtered.slice(offset, offset + limitNum);
+  return res.json({ total, page: pageNum, limit: limitNum, items });
 });
 
 // ─── GET /api/activity/stats ──────────────────────────────────────────────────
-app.get("/api/activity/stats", (_req, res) => {
+app.get("/api/activity/stats", rateLimitMiddleware, async (_req, res) => {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayTs = todayStart.getTime();
 
-  const todayEntries = activityLog.filter((e) => e.timestamp >= todayTs);
+  if (db) {
+    try {
+      const [totRes, blkRes, domRes] = await Promise.all([
+        db.query("SELECT COUNT(*) AS cnt FROM activity WHERE timestamp >= $1", [todayTs]),
+        db.query("SELECT COUNT(*) AS cnt FROM activity WHERE timestamp >= $1 AND action = 'blocked'", [todayTs]),
+        db.query(
+          `SELECT domain, COUNT(*) AS cnt
+             FROM activity
+            WHERE timestamp >= $1
+            GROUP BY domain
+            ORDER BY cnt DESC
+            LIMIT 10`,
+          [todayTs]
+        ),
+      ]);
 
+      return res.json({
+        totalToday:   parseInt(totRes.rows[0].cnt, 10),
+        blockedToday: parseInt(blkRes.rows[0].cnt, 10),
+        topDomains:   domRes.rows.map((r) => ({ domain: r.domain, count: parseInt(r.cnt, 10) })),
+      });
+    } catch (err) {
+      console.error("[PalsPlan DB] GET /api/activity/stats:", err.message);
+      return res.status(500).json({ error: "database error" });
+    }
+  }
+
+  // Fallback
+  const todayEntries = recentActivity.filter((e) => e.timestamp >= todayTs);
   const totalToday   = todayEntries.length;
   const blockedToday = todayEntries.filter((e) => e.action === "blocked").length;
-
-  // Most visited domains today
   const domainCounts = {};
   for (const e of todayEntries) {
     domainCounts[e.domain] = (domainCounts[e.domain] || 0) + 1;
@@ -244,23 +447,47 @@ app.get("/api/activity/stats", (_req, res) => {
   const topDomains = Object.entries(domainCounts)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
-    .map(([domain, count]) => ({ domain, count }));
+    .map(([d, count]) => ({ domain: d, count }));
 
-  res.json({ totalToday, blockedToday, topDomains });
+  return res.json({ totalToday, blockedToday, topDomains });
 });
 
 // ─── GET /api/alerts ─────────────────────────────────────────────────────────
-app.get("/api/alerts", (req, res) => {
+app.get("/api/alerts", rateLimitMiddleware, async (req, res) => {
   const { page = "1", limit = "50" } = req.query;
   const pageNum  = Math.max(1, parseInt(page, 10)  || 1);
   const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+  const offset   = (pageNum - 1) * limitNum;
 
-  const reversed = alertLog.slice().reverse();
+  if (db) {
+    try {
+      const [countRes, rowsRes] = await Promise.all([
+        db.query("SELECT COUNT(*) AS cnt FROM alerts"),
+        db.query(
+          `SELECT id, url, domain, reason, timestamp, severity
+             FROM alerts
+            ORDER BY timestamp DESC
+            LIMIT $1 OFFSET $2`,
+          [limitNum, offset]
+        ),
+      ]);
+      return res.json({
+        total: parseInt(countRes.rows[0].cnt, 10),
+        page:  pageNum,
+        limit: limitNum,
+        items: rowsRes.rows,
+      });
+    } catch (err) {
+      console.error("[PalsPlan DB] GET /api/alerts:", err.message);
+      return res.status(500).json({ error: "database error" });
+    }
+  }
+
+  // Fallback — not meaningful without DB but kept for compatibility
+  const reversed = recentAlerts.slice().reverse();
   const total = reversed.length;
-  const start = (pageNum - 1) * limitNum;
-  const items = reversed.slice(start, start + limitNum);
-
-  res.json({ total, page: pageNum, limit: limitNum, items });
+  const items = reversed.slice(offset, offset + limitNum);
+  return res.json({ total, page: pageNum, limit: limitNum, items });
 });
 
 // ─── GET /api/filters ────────────────────────────────────────────────────────
@@ -279,7 +506,7 @@ app.post("/api/filters", (req, res) => {
     return res.status(400).json({ error: "invalid domain" });
   }
   customFilters.add(normalized);
-  persistData();
+  dbAddFilter(normalized);
 
   // Broadcast add_filter command to connected extensions
   broadcast({ type: "add_filter", domain: normalized }, "extension");
@@ -294,7 +521,7 @@ app.delete("/api/filters/:domain", (req, res) => {
     return res.status(404).json({ error: "domain not found" });
   }
   customFilters.delete(domain);
-  persistData();
+  dbRemoveFilter(domain);
 
   // Broadcast remove_filter command to connected extensions
   broadcast({ type: "remove_filter", domain }, "extension");
@@ -336,8 +563,8 @@ function broadcast(payload, targetRole) {
 
 wss.on("connection", (ws, req) => {
   // Determine client role from query string: ?role=extension or ?role=dashboard
-  const url    = new URL(req.url, `http://${req.headers.host}`);
-  const role   = url.searchParams.get("role") === "extension" ? "extension" : "dashboard";
+  const url  = new URL(req.url, `http://${req.headers.host}`);
+  const role = url.searchParams.get("role") === "extension" ? "extension" : "dashboard";
   clients.set(ws, { role });
 
   console.log(`[PalsPlan WS] ${role} connected (${clients.size} total)`);
@@ -354,7 +581,7 @@ wss.on("connection", (ws, req) => {
     // Send current extension status to the newly-connected dashboard immediately
     ws.send(JSON.stringify({ type: "status", status: extensionConnected ? "online" : "offline" }));
     // Send recent activity history so the live feed isn't empty on load
-    const recent = activityLog.slice(-MAX_HISTORY_ENTRIES).reverse(); // newest first
+    const recent = recentActivity.slice().reverse(); // newest first
     if (recent.length > 0) {
       ws.send(JSON.stringify({ type: "history", entries: recent }));
     }
@@ -380,12 +607,11 @@ wss.on("connection", (ws, req) => {
         domain:    extractDomain(msg.url || ""),
       };
 
-      activityLog.push(entry);
-      if (activityLog.length > MAX_ACTIVITY_SIZE) {
-        activityLog.splice(0, activityLog.length - MAX_ACTIVITY_SIZE);
-      }
+      // Save to DB and keep in the in-memory ring buffer
+      dbInsertActivity(entry);
+      pushRecent(entry);
 
-      // If blocked, also add an alert
+      // If blocked, also create an alert
       if (entry.action === "blocked") {
         const alert = {
           id:        entry.id,
@@ -395,10 +621,8 @@ wss.on("connection", (ws, req) => {
           timestamp: entry.timestamp,
           severity:  getSeverity(entry.reason),
         };
-        alertLog.push(alert);
-        if (alertLog.length > MAX_ALERT_SIZE) {
-          alertLog.splice(0, alertLog.length - MAX_ALERT_SIZE);
-        }
+        dbInsertAlert(alert);
+        pushRecentAlert(alert);
         // Forward alert to dashboards
         broadcast({ type: "alert", alert }, "dashboard");
       }
@@ -409,7 +633,16 @@ wss.on("connection", (ws, req) => {
     } else if (msg.type === "screenshot") {
       // Live screenshot from the extension — relay to all dashboards
       if (role === "extension" && msg.data) {
-        broadcast({ type: "screenshot", data: msg.data, timestamp: msg.timestamp || Date.now(), url: msg.url || "", title: msg.title || "" }, "dashboard");
+        broadcast(
+          {
+            type:      "screenshot",
+            data:      msg.data,
+            timestamp: msg.timestamp || Date.now(),
+            url:       msg.url   || "",
+            title:     msg.title || "",
+          },
+          "dashboard"
+        );
       }
 
     } else if (msg.type === "start_screen_stream") {
@@ -455,7 +688,16 @@ wss.on("connection", (ws, req) => {
 // Start
 // ─────────────────────────────────────────────────────────────────────────────
 
-server.listen(PORT, () => {
-  console.log(`[PalsPlan] Server listening on port ${PORT}`);
-  console.log(`[PalsPlan] WebSocket endpoint: ws://localhost:${PORT}/ws`);
-});
+async function start() {
+  // Initialise DB schema and load persisted filters before accepting traffic
+  await initDb();
+  await loadFiltersFromDb();
+
+  server.listen(PORT, () => {
+    console.log(`[PalsPlan] Server listening on port ${PORT}`);
+    console.log(`[PalsPlan] WebSocket endpoint: ws://localhost:${PORT}/ws`);
+    console.log(`[PalsPlan] Database: ${db ? "PostgreSQL" : "in-memory (no DATABASE_URL)"}`);
+  });
+}
+
+start();

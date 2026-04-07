@@ -6,10 +6,12 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test": "node test-live-view.js"
   },
   "dependencies": {
     "express": "^4.19.2",
+    "pg": "^8.20.0",
     "ws": "^8.18.0"
   },
   "engines": {
