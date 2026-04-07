@@ -48,9 +48,18 @@ const MAX_HISTORY_ENTRIES = 50;
 let db = null;
 
 if (process.env.DATABASE_URL) {
+  // Render-hosted (and most cloud) PostgreSQL instances use self-signed TLS
+  // certificates that Node.js cannot verify against its built-in CA bundle.
+  // `rejectUnauthorized: false` is the standard workaround for these providers.
+  // If you run Postgres locally or with a properly signed cert, you can remove
+  // the ssl option entirely.
+  const sslOption = /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL)
+    ? false
+    : { rejectUnauthorized: false };
+
   db = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
+    ssl: sslOption,
     max: 10,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000,
@@ -239,6 +248,41 @@ function dbRemoveFilter(domain) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Simple in-memory rate limiter
+// Limits each IP to MAX_REQUESTS within WINDOW_MS on protected routes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RATE_WINDOW_MS  = 60_000; // 1 minute
+const RATE_MAX        = 120;    // requests per window per IP
+
+/** @type {Map<string, { count: number, resetAt: number }>} */
+const rateCounts = new Map();
+
+function rateLimitMiddleware(req, res, next) {
+  const ip  = req.socket.remoteAddress || "unknown";
+  const now = Date.now();
+  let entry = rateCounts.get(ip);
+  if (!entry || now >= entry.resetAt) {
+    entry = { count: 0, resetAt: now + RATE_WINDOW_MS };
+    rateCounts.set(ip, entry);
+  }
+  entry.count++;
+  if (entry.count > RATE_MAX) {
+    res.setHeader("Retry-After", Math.ceil((entry.resetAt - now) / 1000));
+    return res.status(429).json({ error: "Too many requests. Please slow down." });
+  }
+  next();
+}
+
+// Periodically prune expired entries to prevent unbounded map growth
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of rateCounts.entries()) {
+    if (now >= entry.resetAt) rateCounts.delete(ip);
+  }
+}, RATE_WINDOW_MS);
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Express app
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -264,7 +308,7 @@ app.get("/api/status", (_req, res) => {
 });
 
 // ─── GET /api/activity ───────────────────────────────────────────────────────
-app.get("/api/activity", async (req, res) => {
+app.get("/api/activity", rateLimitMiddleware, async (req, res) => {
   const {
     page   = "1",
     limit  = "50",
@@ -360,7 +404,7 @@ app.get("/api/activity", async (req, res) => {
 });
 
 // ─── GET /api/activity/stats ──────────────────────────────────────────────────
-app.get("/api/activity/stats", async (_req, res) => {
+app.get("/api/activity/stats", rateLimitMiddleware, async (_req, res) => {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayTs = todayStart.getTime();
@@ -409,7 +453,7 @@ app.get("/api/activity/stats", async (_req, res) => {
 });
 
 // ─── GET /api/alerts ─────────────────────────────────────────────────────────
-app.get("/api/alerts", async (req, res) => {
+app.get("/api/alerts", rateLimitMiddleware, async (req, res) => {
   const { page = "1", limit = "50" } = req.query;
   const pageNum  = Math.max(1, parseInt(page, 10)  || 1);
   const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));

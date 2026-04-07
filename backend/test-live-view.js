@@ -1,7 +1,8 @@
 /**
  * End-to-end test for the PalsPlan live view system.
  *
- * Starts the backend server in-process, then simulates:
+ * Spawns the real server.js as a child process (no DATABASE_URL → in-memory
+ * mode), then simulates:
  *  1. A dashboard client connecting and receiving status/history messages.
  *  2. An extension client connecting and broadcasting activity events.
  *  3. The dashboard receiving those activity events in real-time.
@@ -16,16 +17,8 @@
 
 "use strict";
 
-const http = require("http");
-const { WebSocketServer } = require("ws");
-const { Pool } = require("pg");
+const http      = require("http");
 const WebSocket = require("ws");
-
-// ─── Minimal server inline (mirrors server.js logic without file I/O) ─────────
-// We import the actual server via a child process to avoid module-level side
-// effects, so we just spin up a fresh server on a free port instead.
-
-const express = require("express");
 
 let passed = 0;
 let failed = 0;
@@ -135,7 +128,7 @@ async function run() {
     assert(body.status === "ok", "GET / returns {status:'ok'}");
     const status = await httpGet(`${BASE}/api/status`);
     assert(status.extensionConnected === false, "extensionConnected starts false");
-    assert(status.dbConnected === false, "dbConnected false (no DATABASE_URL)");
+    assert(status.dbConnected === false, "dbConnected is false (no DATABASE_URL)");
   }
 
   // ── 3. Dashboard connects, gets offline status ────────────────────────────
