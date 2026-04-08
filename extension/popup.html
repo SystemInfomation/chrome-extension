@@ -2,183 +2,96 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Watson Control Tower</title>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{width:260px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f8fafc;color:#0f172a;font-size:12px}
 
-    body {
-      width: 300px;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #f1f5f9;
-      color: #0f172a;
-      font-size: 13px;
-    }
+    .hdr{background:linear-gradient(135deg,#1e40af,#3b82f6);padding:10px 12px;display:flex;align-items:center;gap:8px}
+    .hdr-body{flex:1;min-width:0}
+    .hdr-title{font-size:13px;font-weight:700;color:#fff}
+    .hdr-sub{font-size:10px;color:rgba(255,255,255,.7);margin-top:1px}
+    .pill{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);padding:2px 7px;border-radius:99px;flex-shrink:0}
+    .dot{width:5px;height:5px;border-radius:50%;background:#4ade80;animation:blink 2s ease-in-out infinite}
+    .pill-txt{font-size:9px;font-weight:600;color:#fff}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.45}}
 
-    /* ── Header ── */
-    .header {
-      background: linear-gradient(135deg, #1e40af 0%, #2563eb 55%, #3b82f6 100%);
-      padding: 14px 16px 12px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .header-icon {
-      width: 36px; height: 36px;
-      border-radius: 10px;
-      background: rgba(255,255,255,0.18);
-      display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
-    }
-    .header-icon svg { width: 18px; height: 18px; }
-    .header-body { flex: 1; min-width: 0; }
-    .header-title {
-      font-size: 14px; font-weight: 700;
-      color: #fff; letter-spacing: -0.2px;
-    }
-    .header-sub {
-      font-size: 11px; color: rgba(255,255,255,0.72);
-      margin-top: 1px;
-    }
-    .status-pill {
-      display: flex; align-items: center; gap: 5px;
-      background: rgba(255,255,255,0.16);
-      border: 1px solid rgba(255,255,255,0.22);
-      padding: 3px 8px; border-radius: 99px;
-      flex-shrink: 0;
-    }
-    .status-dot {
-      width: 6px; height: 6px; border-radius: 50%;
-      background: #4ade80;
-      animation: blink 2s ease-in-out infinite;
-    }
-    .status-text { font-size: 10px; font-weight: 600; color: #fff; }
-    @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+    .stats{display:flex;gap:6px;padding:8px 10px}
+    .stat{flex:1;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:8px 9px;text-align:center}
+    .stat-num{font-size:20px;font-weight:700;line-height:1;letter-spacing:-.4px}
+    .stat-lbl{font-size:9px;color:#64748b;margin-top:2px}
 
-    /* ── Stats Grid ── */
-    .stats {
-      display: grid; grid-template-columns: 1fr 1fr;
-      gap: 8px; padding: 10px 12px 10px;
-    }
-    .stat {
-      background: #fff;
-      border: 1px solid #e2e8f0;
-      border-radius: 10px;
-      padding: 10px 11px;
-      transition: box-shadow 0.15s ease;
-    }
-    .stat:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
-    .stat-chip {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 24px; height: 24px; border-radius: 7px;
-      margin-bottom: 6px;
-    }
-    .stat-chip svg { width: 12px; height: 12px; }
-    .chip-red   { background: #fef2f2; }
-    .chip-blue  { background: #eff6ff; }
-    .stat-num {
-      font-size: 22px; font-weight: 700; color: #0f172a;
-      line-height: 1; letter-spacing: -0.5px;
-    }
-    .stat-lbl {
-      font-size: 10px; color: #64748b;
-      margin-top: 3px; line-height: 1.4;
-    }
+    .row{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-top:1px solid #e2e8f0}
+    .row-lbl{font-size:10px;color:#64748b;font-weight:500}
+    .row-val{font-size:10px;font-weight:600;display:flex;align-items:center;gap:4px}
+    .row-dot{width:5px;height:5px;border-radius:50%}
+    .g{color:#16a34a}.r{color:#ef4444}.m{color:#94a3b8}
 
-    /* ── Monitor status row ── */
-    .monitor-row {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 6px 12px 8px;
-      border-top: 1px solid #e2e8f0;
-    }
-    .monitor-label {
-      font-size: 10px; color: #94a3b8; font-weight: 500;
-    }
-    .monitor-pill {
-      display: flex; align-items: center; gap: 4px;
-      font-size: 10px; font-weight: 600;
-      padding: 2px 7px; border-radius: 99px;
-    }
-    .monitor-dot {
-      width: 5px; height: 5px; border-radius: 50%;
-    }
-    .monitor-on  { background: #dcfce7; color: #16a34a; }
-    .monitor-off { background: #f1f5f9; color: #94a3b8; }
+    .toggle{position:relative;width:32px;height:18px;background:#cbd5e1;border-radius:99px;cursor:pointer;transition:background .2s;border:none;padding:0;flex-shrink:0}
+    .toggle::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;background:#fff;border-radius:50%;transition:transform .2s}
+    .toggle.active{background:#ef4444}
+    .toggle.active::after{transform:translateX(14px)}
 
-    /* ── Footer ── */
-    .footer {
-      border-top: 1px solid #e2e8f0;
-      padding: 7px 12px;
-      display: flex; align-items: center; justify-content: space-between;
-    }
-    .footer-updated {
-      font-size: 10px; color: #94a3b8;
-    }
-    .footer-version {
-      font-size: 10px; font-weight: 600;
-      padding: 2px 7px; border-radius: 99px;
-      background: #dbeafe; color: #1d4ed8;
-    }
+    .tabs-hdr{cursor:pointer;user-select:none}
+    .tabs-cnt{font-size:9px;font-weight:600;color:#3b82f6;padding:1px 5px;background:#eff6ff;border-radius:99px}
+    .tabs-list{max-height:100px;overflow-y:auto;margin-top:3px}
+    .tabs-list::-webkit-scrollbar{width:2px}
+    .tabs-list::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:2px}
+    .tab{display:flex;align-items:center;gap:4px;padding:2px 0;font-size:9px;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .tab img{width:10px;height:10px;flex-shrink:0;border-radius:2px}
+    .tab span{overflow:hidden;text-overflow:ellipsis}
+
+    .ftr{border-top:1px solid #e2e8f0;padding:5px 10px;display:flex;align-items:center;justify-content:space-between}
+    .ftr-upd{font-size:9px;color:#94a3b8}
+    .ftr-ver{font-size:9px;font-weight:600;padding:1px 6px;border-radius:99px;background:#dbeafe;color:#1d4ed8}
   </style>
 </head>
 <body>
 
-  <!-- Header -->
-  <div class="header">
-    <div class="header-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"
-           stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-      </svg>
+  <div class="hdr">
+    <div class="hdr-body">
+      <div class="hdr-title">Watson Family</div>
+      <div class="hdr-sub" id="greeting">Hello 👋</div>
     </div>
-    <div class="header-body">
-      <div class="header-title">Watson Family</div>
-      <div class="header-sub">Hello, William 👋</div>
-    </div>
-    <div class="status-pill">
-      <div class="status-dot"></div>
-      <span class="status-text">Protected</span>
+    <div class="pill">
+      <div class="dot"></div>
+      <span class="pill-txt">Protected</span>
     </div>
   </div>
 
-  <!-- Stats -->
   <div class="stats" id="stats">
     <div class="stat">
-      <div class="stat-chip chip-red">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.2"
-             stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-        </svg>
-      </div>
       <div class="stat-num" id="blocked-today">—</div>
       <div class="stat-lbl">Blocked today</div>
     </div>
     <div class="stat">
-      <div class="stat-chip chip-blue">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.2"
-             stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-        </svg>
-      </div>
       <div class="stat-num" id="blocked-total">—</div>
       <div class="stat-lbl">Total blocked</div>
     </div>
   </div>
 
-  <!-- Monitor status -->
-  <div class="monitor-row">
-    <span class="monitor-label">Monitoring</span>
-    <span class="monitor-pill monitor-off" id="monitor-status">
-      <span class="monitor-dot" id="monitor-dot" style="background:#94a3b8"></span>
+  <div class="row">
+    <span class="row-lbl">Monitoring</span>
+    <span class="row-val m" id="monitor-status">
+      <span class="row-dot" id="monitor-dot" style="background:#94a3b8"></span>
       <span id="monitor-text">Checking…</span>
     </span>
   </div>
 
-  <!-- Footer -->
-  <div class="footer">
-    <span class="footer-updated" id="blocklist-updated">Checking…</span>
-    <span class="footer-version" id="version">v—</span>
+  <div class="row">
+    <span class="row-lbl">Block All Internet</span>
+    <button class="toggle" id="block-toggle" title="Toggle internet block"></button>
+  </div>
+
+  <div class="row tabs-hdr" id="tabs-toggle">
+    <span class="row-lbl">Open Tabs</span>
+    <span class="tabs-cnt" id="tabs-count">—</span>
+  </div>
+  <div class="tabs-list" id="tabs-list" style="display:none;padding:0 10px 4px"></div>
+
+  <div class="ftr">
+    <span class="ftr-upd" id="blocklist-updated">Checking…</span>
+    <span class="ftr-ver" id="version">v—</span>
   </div>
 
   <script src="popup.js"></script>

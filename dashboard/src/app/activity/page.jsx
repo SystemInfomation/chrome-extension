@@ -172,7 +172,9 @@ export default function ActivityLog() {
 
 function formatDateTime(ts) {
   if (!ts) return "—";
-  return new Date(ts).toLocaleString([], {
+  const d = new Date(typeof ts === "string" ? Number(ts) : ts);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleString([], {
     month: "short", day: "numeric",
     hour: "2-digit", minute: "2-digit",
   });

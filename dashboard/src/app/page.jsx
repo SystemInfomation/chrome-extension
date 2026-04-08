@@ -176,6 +176,26 @@ export default function LiveView() {
 function LiveScreenPanel({ screenshot, active, extensionOnline, wsStatus, onStart, onStop }) {
   const canStream = wsStatus === "connected" && extensionOnline;
   const [expanded, setExpanded] = useState(false);
+  const [fps, setFps] = useState(0);
+  const frameCountRef = useRef(0);
+  const prevScreenshotRef = useRef(null);
+
+  // FPS counter — count how many new frames arrive per second
+  useEffect(() => {
+    const id = setInterval(() => {
+      setFps(frameCountRef.current);
+      frameCountRef.current = 0;
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Track new frames for FPS counter
+  useEffect(() => {
+    if (screenshot && screenshot !== prevScreenshotRef.current) {
+      frameCountRef.current++;
+      prevScreenshotRef.current = screenshot;
+    }
+  }, [screenshot]);
 
   return (
     <div className={`${styles.screenPanel} ${expanded ? styles.screenPanelExpanded : ""}`}>
@@ -186,6 +206,7 @@ function LiveScreenPanel({ screenshot, active, extensionOnline, wsStatus, onStar
           {active && screenshot && (
             <span className={styles.screenLiveBadge}>
               <span className={styles.screenLiveDot} />LIVE
+              {fps > 0 && <span className={styles.screenFps}>{fps} fps</span>}
             </span>
           )}
         </div>
@@ -226,7 +247,7 @@ function LiveScreenPanel({ screenshot, active, extensionOnline, wsStatus, onStar
               alt="Live screen capture"
               className={styles.screenImg}
             />
-            <ScreenOverlay />
+            <ScreenOverlay fps={fps} />
           </>
         ) : (
           <div className={styles.screenPlaceholder}>
@@ -248,7 +269,7 @@ function LiveScreenPanel({ screenshot, active, extensionOnline, wsStatus, onStar
   );
 }
 
-function ScreenOverlay() {
+function ScreenOverlay({ fps }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -259,6 +280,7 @@ function ScreenOverlay() {
     <div className={styles.screenOverlay}>
       <span className={styles.screenOverlayDot} />
       <span>Streaming · {new Date(now).toLocaleTimeString()}</span>
+      {fps > 0 && <span className={styles.screenOverlayFps}>{fps} fps</span>}
     </div>
   );
 }
@@ -364,12 +386,15 @@ function extractDomain(url) {
 
 function formatAbsoluteTime(ts) {
   if (!ts) return "";
-  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const d = new Date(typeof ts === "string" ? Number(ts) : ts);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 function formatRelativeTime(ts) {
   if (!ts) return "";
-  const diff = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  const numTs = typeof ts === "string" ? Number(ts) : ts;
+  const diff = Math.max(0, Math.floor((Date.now() - numTs) / 1000));
   if (diff < 5) return "just now";
   if (diff < 60) return `${diff}s ago`;
   const mins = Math.floor(diff / 60);

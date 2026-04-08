@@ -91,11 +91,22 @@ const urlDecisionCache = new Map();
  */
 const CUSTOM_FILTER_DOMAINS = new Set();
 
-// Load custom filters from storage on SW startup
-chrome.storage.local.get(["customFilterDomains"], (result) => {
+/**
+ * When true, ALL internet access is blocked (kill-switch).
+ * Toggled by the user from the popup or dashboard.
+ * Persisted in chrome.storage.local under "internetBlocked".
+ */
+let internetBlocked = false;
+
+// Load custom filters and internet-block state from storage on SW startup
+chrome.storage.local.get(["customFilterDomains", "internetBlocked"], (result) => {
   const domains = result.customFilterDomains;
   if (Array.isArray(domains)) {
     for (const d of domains) CUSTOM_FILTER_DOMAINS.add(d);
+  }
+  if (result.internetBlocked === true) {
+    internetBlocked = true;
+    applyInternetBlockRules();
   }
 });
 
@@ -110,7 +121,7 @@ let wsBackoff          = 1000;
 
 // ── Screen stream ──────────────────────────────────────────────────────────
 /** Interval (ms) between screenshot captures when screen streaming is active. */
-const SCREEN_STREAM_INTERVAL_MS = 2000;
+const SCREEN_STREAM_INTERVAL_MS = 800;
 
 /** Timer reference for periodic screenshot capture. */
 let screenStreamTimer = null;
@@ -122,6 +133,7 @@ let screenSendInFlight = false;
  * Capture the active tab and send the screenshot to the monitoring backend.
  * Silently ignores errors (e.g. when the active tab is a chrome:// page).
  * Skips the frame if the previous send is still in flight (backpressure).
+ * Uses high JPEG quality for sharp, clear visuals.
  */
 async function captureAndSendScreenshot() {
   if (screenSendInFlight) return; // skip frame — previous still in transit
@@ -131,7 +143,7 @@ async function captureAndSendScreenshot() {
     if (!tab || !tab.id) return;
     // Skip extension pages and internal Chrome pages that cannot be captured
     if (!tab.url || tab.url.startsWith("chrome://") || tab.url.startsWith("chrome-extension://")) return;
-    const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: "jpeg", quality: 60 });
+    const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: "jpeg", quality: 85 });
     wsSend({ type: "screenshot", data: dataUrl, timestamp: Date.now(), url: tab.url, title: tab.title || "" });
   } catch (_e) {
     // Capture may fail if no window is focused or the tab is in an unrenderable state
@@ -188,6 +200,10 @@ function connectMonitorWs() {
     }, WS_HEARTBEAT_INTERVAL_MS);
     // Update popup connection indicator
     chrome.storage.local.set({ monitorConnected: true });
+    // Start reporting open tabs to the backend
+    startTabReporting();
+    // Auto-start live screen stream (always-on monitoring)
+    startScreenStream();
   };
 
   monitorWs.onmessage = (event) => {
@@ -214,6 +230,7 @@ function connectMonitorWs() {
   monitorWs.onclose = () => {
     clearInterval(wsHeartbeatTimer);
     stopScreenStream(); // stop sending screenshots when disconnected
+    stopTabReporting(); // stop tab reporting when disconnected
     chrome.storage.local.set({ monitorConnected: false });
     scheduleWsReconnect();
   };
@@ -298,8 +315,8 @@ function persistCustomFilters() {
  */
 const WHITELIST = new Set([
   // Own domains
-  "Watsons.app",
-  "blocked.Watsons.app",
+  "watsons.app",
+  "blocked.watsons.app",
   
   // Google services
   "google.com",
@@ -448,6 +465,94 @@ const VPN_PROXY_DOMAINS = new Set([
   "ultrasurf.us",
   "psiphon.ca",
   "getlantern.org",
+  "ivacy.com",
+  "strongvpn.com",
+  "trust.zone",
+  "fastestvpn.com",
+  "vpnunlimited.com",
+  "browsec.com",
+  "betternet.co",
+  "zoogvpn.com",
+  "privadovpn.com",
+  "urban-vpn.com",
+  "vpn.ac",
+  "blackvpn.com",
+  "cactusvpn.com",
+  "seed4.me",
+  "vpn.ht",
+  "vpnarea.com",
+  "vpn4all.com",
+  "vpntraffic.com",
+  "vpnintouch.com",
+  "vpn.asia",
+  "vpn360.com",
+  "vpnreactor.com",
+  "vpnbaron.com",
+  "vpnhub.com",
+  "vpnmaster.com",
+  "vpnproxy.me",
+  "vpnshieldapp.com",
+  "vpncenter.com",
+  "vpnhero.com",
+  "vpnprivacy.com",
+  "vpnsolutions.net",
+  "vpnservice.net",
+  "vpncomparison.org",
+  "vpnprivacy.io",
+  "clearvpn.com",
+  "atlasvpn.com",
+  "hoxx.com",
+  "ibvpn.com",
+  "le-vpn.com",
+  "libertyvpn.net",
+  "liquidvpn.com",
+  "myexpatnetwork.com",
+  "nordlayer.com",
+  "nullvpn.com",
+  "octanevpn.com",
+  "okayfreedom.com",
+  "overplay.net",
+  "privatetunnel.com",
+  "proxpn.com",
+  "relakks.com",
+  "securitykiss.com",
+  "shellfire.de",
+  "smartdnsproxy.com",
+  "snowdenvpn.com",
+  "supervpn.net",
+  "switchvpn.net",
+  "tigervpn.com",
+  "totalvpn.com",
+  "ultravpn.com",
+  "vpntunnel.com",
+  "vpntunnel.se",
+  "vpnworldwide.com",
+  "witopia.net",
+  "xvpn.io",
+  "vpn.com",
+  "vpnbook.com",
+  "zpn.im",
+  "byster.com",
+  "windscribe.net",
+  "frootvpn.com",
+  "zenvpn.net",
+  "vpnjack.com",
+  // ── Tor, tunneling, and overlay networks ─────────────────────────────────
+  "torproject.org",
+  "lantern.io",
+  "getoutline.org",
+  "softether.org",
+  "vpngate.net",
+  "touchvpn.net",
+  "turbovpn.com",
+  "setupvpn.com",
+  "warp.plus",
+  "cloudflarewarp.com",
+  "tailscale.com",
+  "zerotier.com",
+  "ngrok.com",
+  "epicbrowser.com",
+  "hola.com",
   // ── Web proxy services ───────────────────────────────────────────────────
   "croxyproxy.com",
   "kproxy.com",
@@ -464,6 +569,15 @@ const VPN_PROXY_DOMAINS = new Set([
   "proxyium.com",
   "youtubeunblocked.live",
   "unblockyt.net",
+  "megaproxy.com",
+  "proxynova.com",
+  "blockaway.net",
+  "proxyscrape.com",
+  "brightdata.com",
+  "smartproxy.com",
+  "oxylabs.io",
+  "spys.one",
+  "free-proxy.cz",
 ]);
 
 /**
@@ -477,6 +591,144 @@ function isVpnProxy(hostname) {
   const parts = hostname.split(".");
   for (let i = 1; i < parts.length - 1; i++) {
     if (VPN_PROXY_DOMAINS.has(parts.slice(i).join("."))) return true;
+  }
+  return false;
+}
+
+/**
+ * Popular dating / hookup site domains.
+ * These are blocked in a parental-control context to keep children safe.
+ */
+const DATING_DOMAINS = new Set([
+  "tinder.com",
+  "bumble.com",
+  "hinge.co",
+  "match.com",
+  "okcupid.com",
+  "pof.com",
+  "zoosk.com",
+  "eharmony.com",
+  "badoo.com",
+  "grindr.com",
+  "her.app",
+  "coffeemeetsbagel.com",
+  "happn.com",
+  "plenty.fish",
+  "meetme.com",
+  "tagged.com",
+  "skout.com",
+  "mingle2.com",
+  "loveflutter.com",
+  "dating.com",
+  "elitesingles.com",
+  "silversingles.com",
+  "jdate.com",
+  "christianmingle.com",
+  "ourtime.com",
+  "blackpeoplemeet.com",
+  "ashleymadison.com",
+  "seeking.com",
+  "sugarbook.com",
+  "whatsyourprice.com",
+  "fetlife.com",
+  "adultfriendfinder.com",
+  "benaughty.com",
+  "flirt.com",
+  "fling.com",
+  "snapsext.com",
+  "ihookup.com",
+  "instabang.com",
+  "maturesinglesonly.com",
+  "cougarlife.com",
+  "lavalife.com",
+  "meetic.com",
+  "parship.com",
+  "lovoo.com",
+  "twoo.com",
+  "waplog.com",
+  "wireclub.com",
+  "chatiw.com",
+  "shagle.com",
+  "chatrandom.com",
+  "omegle.com",
+  "chatroulette.com",
+  "tinychat.com",
+  "camsurf.com",
+  "chatspin.com",
+  "emeraldchat.com",
+  "chatki.com",
+  "azar.com",
+  "fruzo.com",
+  "chatous.com",
+  "connected2.me",
+  "yubo.live",
+  "spotafriend.co",
+  "litmatch.app",
+  "snack.dating",
+  "ship.dating",
+]);
+
+/**
+ * Returns true if the hostname (or any parent domain) is a known dating site.
+ *
+ * @param {string} hostname
+ * @returns {boolean}
+ */
+function isDatingSite(hostname) {
+  if (DATING_DOMAINS.has(hostname)) return true;
+  const parts = hostname.split(".");
+  for (let i = 1; i < parts.length - 1; i++) {
+    if (DATING_DOMAINS.has(parts.slice(i).join("."))) return true;
+  }
+  return false;
+}
+
+/**
+ * Explicit adult site domains that are hard-blocked regardless of blocklist
+ * or regex matching, to guarantee no bypass.
+ */
+const EXPLICIT_ADULT_DOMAINS = new Set([
+  "pornhub.com",
+  "xvideos.com",
+  "xnxx.com",
+  "redtube.com",
+  "beeg.com",
+  "chaturbate.com",
+  "xhamster.com",
+  "spankbang.com",
+  "youporn.com",
+  "tube8.com",
+  "xtube.com",
+  "motherless.com",
+  "eporner.com",
+  "naughtyamerica.com",
+  "brazzers.com",
+  "bangbros.com",
+  "realitykings.com",
+  "onlyfans.com",
+  "fansly.com",
+  "manyvids.com",
+  "camsoda.com",
+  "stripchat.com",
+  "bongacams.com",
+  "livejasmin.com",
+  "myfreecams.com",
+  "cam4.com",
+  "flirt4free.com",
+  "imlive.com",
+]);
+
+/**
+ * Returns true if the hostname (or any parent domain) is a hard-blocked adult site.
+ *
+ * @param {string} hostname
+ * @returns {boolean}
+ */
+function isExplicitAdultSite(hostname) {
+  if (EXPLICIT_ADULT_DOMAINS.has(hostname)) return true;
+  const parts = hostname.split(".");
+  for (let i = 1; i < parts.length - 1; i++) {
+    if (EXPLICIT_ADULT_DOMAINS.has(parts.slice(i).join("."))) return true;
   }
   return false;
 }
@@ -692,6 +944,14 @@ function evaluate(url) {
 
   let decision;
 
+  // 0. Block ALL internet access when the kill-switch is active
+  if (internetBlocked) {
+    decision = { blocked: true, reason: "Internet Access Blocked" };
+    maybePruneCache();
+    urlDecisionCache.set(url, decision);
+    return decision;
+  }
+
   // Extract hostname for checks
   let hostname;
   try {
@@ -714,27 +974,35 @@ function evaluate(url) {
   else if (isCustomBlocked(hostname)) {
     decision = { blocked: true, reason: "Blocked by Parent Filter" };
   }
-  // 3. Adult content check (keyword/pattern match on full URL)
+  // 3. Explicit adult site domain check (hard-blocked, no bypass)
+  else if (isExplicitAdultSite(hostname)) {
+    decision = { blocked: true, reason: "Adult Content" };
+  }
+  // 4. Adult content check (keyword/pattern match on full URL)
   else if (ADULT_REGEX.test(url)) {
     decision = { blocked: true, reason: "Adult Content" };
   }
-  // 4. VPN / proxy service check (hostname match)
+  // 5. Dating / hookup site check
+  else if (isDatingSite(hostname)) {
+    decision = { blocked: true, reason: "Dating Site Blocked" };
+  }
+  // 6. VPN / proxy service check (hostname match)
   else if (isVpnProxy(hostname)) {
     decision = { blocked: true, reason: "VPN/Proxy Service Blocked" };
   }
-  // 5. Malicious TLD check
+  // 7. Malicious TLD check
   else if (hasMaliciousTld(hostname)) {
     decision = { blocked: true, reason: "Malicious Domain Blocked" };
   }
-  // 6. External blocklist domain check (RPiList porn + AdGuard spyware)
+  // 8. External blocklist domain check (RPiList porn + AdGuard spyware)
   else if (isBlocklisted(hostname)) {
     decision = { blocked: true, reason: "Blocked by Family-Safe Filter" };
   }
-  // 7. Known malicious patterns
+  // 9. Known malicious patterns
   else if (UNSAFE_REGEX.test(url)) {
     decision = { blocked: true, reason: "Malicious Content Blocked" };
   } else {
-    // 8. Malicious / suspicious site check (link-shield offline heuristics)
+    // 10. Malicious / suspicious site check (link-shield offline heuristics)
     try {
       const result = detectSuspiciousLink(url, { threshold: RISK_SCORE_THRESHOLD });
       if (result.suspicious || result.riskScore >= RISK_SCORE_THRESHOLD) {
@@ -796,11 +1064,89 @@ function incrementBlockedCount() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Block All Internet — declarativeNetRequest kill-switch
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The rule ID used for the "block all internet" kill-switch. */
+const BLOCK_ALL_RULE_ID = 99999;
+
+/**
+ * Apply a declarativeNetRequest rule that blocks every http/https request.
+ * This provides a hard network-level block that cannot be bypassed by page JS.
+ */
+function applyInternetBlockRules() {
+  chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [BLOCK_ALL_RULE_ID],
+    addRules: [{
+      id: BLOCK_ALL_RULE_ID,
+      priority: 1,
+      action: { type: "block" },
+      condition: {
+        urlFilter: "*",
+        resourceTypes: [
+          "main_frame", "sub_frame", "stylesheet", "script", "image",
+          "font", "object", "xmlhttprequest", "ping", "media",
+          "websocket", "webtransport", "webbundle", "other",
+        ],
+      },
+    }],
+  });
+}
+
+/**
+ * Remove the "block all internet" rule, restoring normal filtering.
+ */
+function removeInternetBlockRules() {
+  chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [BLOCK_ALL_RULE_ID],
+    addRules: [],
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab visibility — report all open tabs (including chrome:// pages)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Query all open tabs and send their info to the monitoring backend.
+ * Includes internal Chrome pages (chrome://) since we have the "tabs" permission.
+ */
+function reportOpenTabs() {
+  chrome.tabs.query({}, (tabs) => {
+    if (chrome.runtime.lastError) return;
+    const tabList = tabs.map((t) => ({
+      id: t.id,
+      url: t.url || "",
+      title: t.title || "",
+      active: t.active,
+      windowId: t.windowId,
+      favIconUrl: t.favIconUrl || "",
+    }));
+    wsSend({ type: "open_tabs", tabs: tabList, timestamp: Date.now() });
+  });
+}
+
+/** Interval timer for periodic tab reporting. */
+let tabReportTimer = null;
+
+/** Report open tabs every 10 seconds when monitoring is connected. */
+function startTabReporting() {
+  if (tabReportTimer) return;
+  reportOpenTabs(); // immediate first report
+  tabReportTimer = setInterval(reportOpenTabs, 10_000);
+}
+
+function stopTabReporting() {
+  clearInterval(tabReportTimer);
+  tabReportTimer = null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Popup message handler
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Responds to GET_STATS messages from the popup with current protection stats.
+ * Responds to GET_STATS and SET_INTERNET_BLOCKED messages from the popup.
  */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "GET_STATS") {
@@ -815,10 +1161,47 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           blocklistUpdatedAt: result.blocklistUpdatedAt || null,
           version: chrome.runtime.getManifest().version,
           monitorConnected: result.monitorConnected === true,
+          internetBlocked: internetBlocked,
+          idleState: currentIdleState,
         });
       }
     );
+    // Refresh identity in the background for next popup open
+    fetchUserIdentity();
     return true; // keep the message channel open for async response
+  }
+
+  if (message.type === "SET_INTERNET_BLOCKED") {
+    const blocked = message.blocked === true;
+    internetBlocked = blocked;
+    urlDecisionCache.clear(); // invalidate cache so the toggle takes effect immediately
+    chrome.storage.local.set({ internetBlocked: blocked });
+    if (blocked) {
+      applyInternetBlockRules();
+    } else {
+      removeInternetBlockRules();
+    }
+    sendResponse({ ok: true, internetBlocked: blocked });
+    return true;
+  }
+
+  if (message.type === "GET_OPEN_TABS") {
+    chrome.tabs.query({}, (tabs) => {
+      if (chrome.runtime.lastError) {
+        sendResponse({ tabs: [] });
+        return;
+      }
+      const tabList = tabs.map((t) => ({
+        id: t.id,
+        url: t.url || "",
+        title: t.title || "",
+        active: t.active,
+        windowId: t.windowId,
+        favIconUrl: t.favIconUrl || "",
+      }));
+      sendResponse({ tabs: tabList });
+    });
+    return true;
   }
 });
 
@@ -868,6 +1251,9 @@ chrome.webNavigation.onBeforeNavigate.addListener(
 
       // Report blocked navigation to monitoring backend
       reportActivity(url, "", "blocked", decision.reason);
+
+      // Purge cookies from the blocked domain to prevent tracking persistence
+      clearCookiesForDomain(hostname);
 
       // Track statistics and redirect
       incrementBlockedCount();
@@ -1182,3 +1568,184 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // ─────────────────────────────────────────────────────────────────────────────
 loadLocalBlocklist();
 connectMonitorWs();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// identity / identity.email — fetch signed-in Chrome profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Retrieves the signed-in Chrome user's email and stores it so the popup can
+ * display the real user name and the monitoring backend can identify the device.
+ */
+function fetchUserIdentity() {
+  if (!chrome.identity || !chrome.identity.getProfileUserInfo) return;
+  chrome.identity.getProfileUserInfo({ accountStatus: "ANY" }, (info) => {
+    if (chrome.runtime.lastError) return;
+    const email = (info && info.email) || "";
+    const id    = (info && info.id)    || "";
+    chrome.storage.local.set({ userEmail: email, userId: id });
+    // Report identity to monitoring backend
+    if (email) {
+      wsSend({ type: "identity", email, id, timestamp: Date.now() });
+    }
+  });
+}
+
+// Fetch on every SW start and on install
+fetchUserIdentity();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// offscreen — maintain an offscreen document for DOM-based text parsing
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Ensures the offscreen document exists. Used for heavy text parsing tasks
+ * (blocklist processing) without blocking the service worker.
+ */
+async function ensureOffscreenDocument() {
+  if (!chrome.offscreen) return;
+  try {
+    const existing = await chrome.offscreen.hasDocument();
+    if (existing) return;
+    await chrome.offscreen.createDocument({
+      url: "offscreen.html",
+      reasons: ["DOM_PARSER"],
+      justification: "Parse blocklist text data without blocking the service worker",
+    });
+  } catch (_e) {
+    // Offscreen document may already exist or API not available
+  }
+}
+
+// Create offscreen document on SW start
+ensureOffscreenDocument();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// cookies — remove cookies from blocked domains after a block event
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Removes all cookies for a given domain to prevent tracking/session
+ * persistence from blocked sites.
+ *
+ * @param {string} domain  The hostname to purge cookies for
+ */
+function clearCookiesForDomain(domain) {
+  if (!chrome.cookies || !chrome.cookies.getAll) return;
+  const urls = [`https://${domain}`, `http://${domain}`];
+  for (const url of urls) {
+    chrome.cookies.getAll({ url }, (cookies) => {
+      if (chrome.runtime.lastError || !cookies) return;
+      for (const cookie of cookies) {
+        chrome.cookies.remove({
+          url: url + cookie.path,
+          name: cookie.name,
+        });
+      }
+    });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// idle — report user activity state to monitoring backend
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Current idle state — tracked so we can start/stop streaming accordingly. */
+let currentIdleState = "active";
+
+/**
+ * Seconds of inactivity before the user is considered idle.
+ * At this point screen streaming pauses to conserve bandwidth.
+ */
+const IDLE_DETECTION_SECONDS = 120;
+
+if (chrome.idle) {
+  chrome.idle.setDetectionInterval(IDLE_DETECTION_SECONDS);
+
+  chrome.idle.onStateChanged.addListener((newState) => {
+    currentIdleState = newState; // "active" | "idle" | "locked"
+    wsSend({ type: "idle_state", state: newState, timestamp: Date.now() });
+
+    // Pause screen streaming when the user is idle/locked to save bandwidth
+    if (newState === "active") {
+      startScreenStream();
+    } else {
+      stopScreenStream();
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// scripting — inject page-title extraction on completed navigations
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * After a page finishes loading, inject a tiny script to extract the final
+ * document.title (which may differ from the title at navigation start) and
+ * report the accurate title to the monitoring backend.
+ */
+chrome.webNavigation.onCompleted.addListener((details) => {
+  if (details.frameId !== 0) return;
+  const url = details.url;
+  if (!url.startsWith("http://") && !url.startsWith("https://")) return;
+
+  chrome.scripting.executeScript(
+    {
+      target: { tabId: details.tabId },
+      func: () => document.title,
+    },
+    (results) => {
+      if (chrome.runtime.lastError || !results || !results[0]) return;
+      const title = results[0].result || "";
+      if (title) {
+        reportActivity(url, title, "visit", null);
+      }
+    }
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// webRequest — secondary blocking layer via onBeforeRequest
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * webRequest.onBeforeRequest provides a secondary blocking layer that fires
+ * for ALL resource types (images, scripts, XHR, etc.), not just main-frame
+ * navigations. This catches sub-resource requests to blocked domains that
+ * the webNavigation listener would miss (e.g. an ad script loading from a
+ * blocked domain embedded on an allowed page).
+ */
+if (chrome.webRequest && chrome.webRequest.onBeforeRequest) {
+  chrome.webRequest.onBeforeRequest.addListener(
+    (details) => {
+      const url = details.url;
+      if (!url) return;
+
+      let hostname;
+      try {
+        hostname = new URL(url).hostname.toLowerCase();
+      } catch (_e) {
+        return;
+      }
+
+      // Skip whitelisted and own blocked-page domain
+      if (isWhitelisted(hostname)) return;
+      try {
+        if (hostname === new URL(BLOCKED_PAGE_BASE).hostname.toLowerCase()) return;
+      } catch (_e) { /* ignore */ }
+
+      const decision = evaluate(url);
+      if (decision.blocked) {
+        // For main_frame, let the webNavigation handler do the redirect.
+        // For sub-resources, cancel the request silently and log it.
+        if (details.type !== "main_frame") {
+          console.warn("[WatsonCT] Blocked sub-resource from", hostname, "type:", details.type);
+          incrementBlockedCount();
+          return { cancel: true };
+        }
+      }
+    },
+    { urls: ["<all_urls>"] },
+    ["blocking"]
+  );
+}

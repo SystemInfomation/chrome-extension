@@ -379,6 +379,8 @@
   overflow: hidden;
   margin-bottom: 24px;
   transition: max-height 0.3s ease;
+  /* GPU-accelerated compositing for smoother frame updates */
+  will-change: contents;
 }
 
 .screenPanelExpanded {
@@ -421,6 +423,13 @@
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.05em;
+}
+
+.screenFps {
+  font-size: 9px;
+  font-weight: 500;
+  opacity: 0.7;
+  margin-left: 2px;
 }
 
 .screenLiveDot {
@@ -485,8 +494,8 @@
 .screenDisplay {
   position: relative;
   width: 100%;
-  background: var(--bg-elevated);
-  min-height: 240px;
+  background: #0a0a0f;
+  min-height: 280px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -496,9 +505,15 @@
   display: block;
   width: 100%;
   height: auto;
-  max-height: 540px;
+  max-height: 720px;
   object-fit: contain;
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  /* GPU-accelerated compositing — eliminates flicker on frame swap */
+  transform: translateZ(0);
+  will-change: contents;
+  /* Sharp pixel rendering for text-heavy screens */
+  image-rendering: auto;
+  -webkit-image-rendering: auto;
 }
 
 .screenPlaceholder {
@@ -534,6 +549,13 @@
   font-size: 11px;
   font-weight: 600;
   pointer-events: none;
+}
+
+.screenOverlayFps {
+  font-size: 9px;
+  font-weight: 500;
+  opacity: 0.6;
+  margin-left: 4px;
 }
 
 .screenOverlayDot {

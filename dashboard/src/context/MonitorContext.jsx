@@ -49,6 +49,7 @@ export function MonitorProvider({ children }) {
   const [newAlertCount, setAlertCount]         = useState(0);
   const [liveScreenshot, setLiveScreenshot]    = useState(null);
   const [screenStreamActive, setStreamActive] = useState(false);
+  const [openTabs, setOpenTabs]               = useState([]);
 
   const wsRef        = useRef(null);
   const reconnectRef = useRef(null);
@@ -99,11 +100,18 @@ export function MonitorProvider({ children }) {
         });
       } else if (msg.type === "status") {
         setExtOnline(msg.status === "online");
+        // Monitoring and screen stream are always on when extension is online
+        if (msg.status === "online") {
+          setStreamActive(true);
+        }
       } else if (msg.type === "screenshot" && msg.data) {
         setLiveScreenshot(msg.data);
+        setStreamActive(true);
       } else if (msg.type === "screen_stream_stopped") {
         setStreamActive(false);
         setLiveScreenshot(null);
+      } else if (msg.type === "open_tabs" && Array.isArray(msg.tabs)) {
+        setOpenTabs(msg.tabs);
       }
     };
 
@@ -181,6 +189,7 @@ export function MonitorProvider({ children }) {
         screenStreamActive,
         startScreenStream,
         stopScreenStream,
+        openTabs,
       }}
     >
       {children}
