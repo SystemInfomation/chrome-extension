@@ -670,6 +670,21 @@ wss.on("connection", (ws, req) => {
       if (role === "extension" && Array.isArray(msg.tabs)) {
         broadcast({ type: "open_tabs", tabs: msg.tabs, timestamp: msg.timestamp || Date.now() }, "dashboard");
       }
+    } else if (msg.type === "set_internet_blocked") {
+      // Dashboard requesting to toggle internet block — forward to extension(s)
+      if (role === "dashboard") {
+        broadcast({ type: "set_internet_blocked", blocked: msg.blocked === true }, "extension");
+      }
+    } else if (msg.type === "get_internet_status") {
+      // Dashboard requesting current internet block status — forward to extension(s)
+      if (role === "dashboard") {
+        broadcast({ type: "get_internet_status" }, "extension");
+      }
+    } else if (msg.type === "internet_status") {
+      // Extension reporting internet block status — forward to dashboards
+      if (role === "extension") {
+        broadcast({ type: "internet_status", blocked: msg.blocked === true }, "dashboard");
+      }
     }
   });
 

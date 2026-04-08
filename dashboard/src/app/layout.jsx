@@ -1,6 +1,8 @@
 import "./globals.css";
 import { MonitorProvider } from "../context/MonitorContext";
+import { PinAuthProvider } from "../context/PinAuthContext";
 import Sidebar from "../components/Sidebar";
+import PinLock from "../components/PinLock";
 
 export const metadata = {
   title: "Watson Control Tower — Parental Monitor",
@@ -19,21 +21,25 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body>
-        <MonitorProvider>
-          <div style={{ display: "flex", height: "100dvh", overflow: "hidden" }}>
-            <Sidebar />
-            <main
-              style={{
-                flex: 1,
-                overflowY: "auto",
-                background: "var(--bg-mesh)",
-                backgroundAttachment: "fixed",
-              }}
-            >
-              {children}
-            </main>
-          </div>
-        </MonitorProvider>
+        <PinAuthProvider>
+          <PinLock>
+            <MonitorProvider>
+              <div style={{ display: "flex", height: "100dvh", overflow: "hidden" }}>
+                <Sidebar />
+                <main
+                  style={{
+                    flex: 1,
+                    overflowY: "auto",
+                    background: "var(--bg-mesh)",
+                    backgroundAttachment: "fixed",
+                  }}
+                >
+                  {children}
+                </main>
+              </div>
+            </MonitorProvider>
+          </PinLock>
+        </PinAuthProvider>
       </body>
     </html>
   );

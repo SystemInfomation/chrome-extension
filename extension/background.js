@@ -220,6 +220,20 @@ function connectMonitorWs() {
       for (const d of msg.filters) CUSTOM_FILTER_DOMAINS.add(d);
       persistCustomFilters();
       urlDecisionCache.clear();
+    } else if (msg.type === "set_internet_blocked") {
+      const blocked = msg.blocked === true;
+      internetBlocked = blocked;
+      urlDecisionCache.clear();
+      chrome.storage.local.set({ internetBlocked: blocked });
+      if (blocked) {
+        applyInternetBlockRules();
+      } else {
+        removeInternetBlockRules();
+      }
+      // Acknowledge the new state back to the backend
+      wsSend({ type: "internet_status", blocked });
+    } else if (msg.type === "get_internet_status") {
+      wsSend({ type: "internet_status", blocked: internetBlocked });
     } else if (msg.type === "start_screen_stream") {
       startScreenStream();
     } else if (msg.type === "stop_screen_stream") {
