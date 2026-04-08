@@ -364,12 +364,15 @@ function extractDomain(url) {
 
 function formatAbsoluteTime(ts) {
   if (!ts) return "";
-  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const d = new Date(typeof ts === "string" ? Number(ts) : ts);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 function formatRelativeTime(ts) {
   if (!ts) return "";
-  const diff = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  const numTs = typeof ts === "string" ? Number(ts) : ts;
+  const diff = Math.max(0, Math.floor((Date.now() - numTs) / 1000));
   if (diff < 5) return "just now";
   if (diff < 60) return `${diff}s ago`;
   const mins = Math.floor(diff / 60);

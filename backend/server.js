@@ -365,7 +365,7 @@ app.get("/api/activity", rateLimitMiddleware, async (req, res) => {
         total: parseInt(countRes.rows[0].cnt, 10),
         page:  pageNum,
         limit: limitNum,
-        items: rowsRes.rows,
+        items: rowsRes.rows.map((r) => ({ ...r, timestamp: Number(r.timestamp) })),
       });
     } catch (err) {
       console.error("[WatsonCT DB] GET /api/activity:", err.message);
@@ -475,7 +475,7 @@ app.get("/api/alerts", rateLimitMiddleware, async (req, res) => {
         total: parseInt(countRes.rows[0].cnt, 10),
         page:  pageNum,
         limit: limitNum,
-        items: rowsRes.rows,
+        items: rowsRes.rows.map((r) => ({ ...r, timestamp: Number(r.timestamp) })),
       });
     } catch (err) {
       console.error("[WatsonCT DB] GET /api/alerts:", err.message);
@@ -577,6 +577,8 @@ wss.on("connection", (ws, req) => {
     if (customFilters.size > 0) {
       ws.send(JSON.stringify({ type: "filters_sync", filters: Array.from(customFilters) }));
     }
+    // Auto-start live screen stream so monitoring is always on
+    ws.send(JSON.stringify({ type: "start_screen_stream" }));
   } else {
     // Send current extension status to the newly-connected dashboard immediately
     ws.send(JSON.stringify({ type: "status", status: extensionConnected ? "online" : "offline" }));
@@ -662,6 +664,11 @@ wss.on("connection", (ws, req) => {
       if (role === "extension") {
         extensionConnected = true;
         broadcast({ type: "status", status: "online" }, "dashboard");
+      }
+    } else if (msg.type === "open_tabs") {
+      // Extension reporting all open tabs — relay to dashboards
+      if (role === "extension" && Array.isArray(msg.tabs)) {
+        broadcast({ type: "open_tabs", tabs: msg.tabs, timestamp: msg.timestamp || Date.now() }, "dashboard");
       }
     }
   });

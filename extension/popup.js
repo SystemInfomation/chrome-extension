@@ -83,6 +83,16 @@
         txt.textContent = "Disconnected";
       }
     }
+
+    // Block-all toggle state
+    const toggle = el("block-toggle");
+    if (toggle) {
+      if (stats.internetBlocked) {
+        toggle.classList.add("active");
+      } else {
+        toggle.classList.remove("active");
+      }
+    }
   }
 
   /**
@@ -116,4 +126,65 @@
     }
     if (response) render(response);
   });
+
+  // ── Block All Internet toggle ──────────────────────────────────────────
+  const blockToggle = document.getElementById("block-toggle");
+  if (blockToggle) {
+    blockToggle.addEventListener("click", () => {
+      const newState = !blockToggle.classList.contains("active");
+      chrome.runtime.sendMessage({ type: "SET_INTERNET_BLOCKED", blocked: newState }, (resp) => {
+        if (chrome.runtime.lastError) return;
+        if (resp && resp.ok) {
+          blockToggle.classList.toggle("active", resp.internetBlocked);
+        }
+      });
+    });
+  }
+
+  // ── Open Tabs display ──────────────────────────────────────────────────
+  const tabsToggle = document.getElementById("tabs-toggle");
+  const tabsList   = document.getElementById("tabs-list");
+  const tabsCount  = document.getElementById("tabs-count");
+
+  function loadTabs() {
+    chrome.runtime.sendMessage({ type: "GET_OPEN_TABS" }, (resp) => {
+      if (chrome.runtime.lastError || !resp || !resp.tabs) return;
+      const tabs = resp.tabs;
+      if (tabsCount) tabsCount.textContent = String(tabs.length);
+      if (tabsList) {
+        tabsList.innerHTML = "";
+        for (const tab of tabs) {
+          const div = document.createElement("div");
+          div.className = "tab-item";
+          const img = document.createElement("img");
+          img.src = tab.favIconUrl || "icons/icon16.png";
+          img.alt = "";
+          img.onerror = function () { this.src = "icons/icon16.png"; };
+          const span = document.createElement("span");
+          span.textContent = tab.title || tab.url || "Untitled";
+          span.title = tab.url || "";
+          div.appendChild(img);
+          div.appendChild(span);
+          tabsList.appendChild(div);
+        }
+      }
+    });
+  }
+
+  if (tabsToggle && tabsList) {
+    tabsToggle.addEventListener("click", () => {
+      const visible = tabsList.style.display !== "none";
+      tabsList.style.display = visible ? "none" : "block";
+      if (!visible) loadTabs();
+    });
+  }
+
+  // ── Real-time timestamp updater (refresh blocklist "Updated X ago" every 30s) ──
+  setInterval(() => {
+    chrome.runtime.sendMessage({ type: "GET_STATS" }, (resp) => {
+      if (chrome.runtime.lastError || !resp) return;
+      const el = document.getElementById("blocklist-updated");
+      if (el) el.textContent = `Updated ${timeAgo(resp.blocklistUpdatedAt)}`;
+    });
+  }, 30_000);
 })();

@@ -105,6 +105,58 @@
     .monitor-on  { background: #dcfce7; color: #16a34a; }
     .monitor-off { background: #f1f5f9; color: #94a3b8; }
 
+    /* ── Block-all toggle ── */
+    .block-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px;
+      border-top: 1px solid #e2e8f0;
+    }
+    .block-label { font-size: 11px; font-weight: 600; color: #0f172a; }
+    .block-sub   { font-size: 9px; color: #94a3b8; margin-top: 1px; }
+    .toggle {
+      position: relative; width: 36px; height: 20px;
+      background: #cbd5e1; border-radius: 99px;
+      cursor: pointer; transition: background 0.2s ease;
+      border: none; padding: 0; flex-shrink: 0;
+    }
+    .toggle::after {
+      content: ""; position: absolute;
+      top: 2px; left: 2px;
+      width: 16px; height: 16px;
+      background: #fff; border-radius: 50%;
+      transition: transform 0.2s ease;
+    }
+    .toggle.active { background: #ef4444; }
+    .toggle.active::after { transform: translateX(16px); }
+
+    /* ── Tabs section ── */
+    .tabs-row {
+      border-top: 1px solid #e2e8f0;
+      padding: 6px 12px 8px;
+    }
+    .tabs-header {
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; user-select: none;
+    }
+    .tabs-title { font-size: 10px; color: #94a3b8; font-weight: 500; }
+    .tabs-count {
+      font-size: 10px; font-weight: 600; color: #3b82f6;
+      padding: 1px 6px; background: #eff6ff; border-radius: 99px;
+    }
+    .tabs-list {
+      max-height: 120px; overflow-y: auto;
+      margin-top: 4px;
+    }
+    .tabs-list::-webkit-scrollbar { width: 3px; }
+    .tabs-list::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+    .tab-item {
+      display: flex; align-items: center; gap: 5px;
+      padding: 3px 0; font-size: 10px; color: #334155;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tab-item img { width: 12px; height: 12px; flex-shrink: 0; border-radius: 2px; }
+    .tab-item span { overflow: hidden; text-overflow: ellipsis; }
+
     /* ── Footer ── */
     .footer {
       border-top: 1px solid #e2e8f0;
@@ -173,6 +225,24 @@
       <span class="monitor-dot" id="monitor-dot" style="background:#94a3b8"></span>
       <span id="monitor-text">Checking…</span>
     </span>
+  </div>
+
+  <!-- Block all internet toggle -->
+  <div class="block-row">
+    <div>
+      <div class="block-label">Block All Internet</div>
+      <div class="block-sub">Prevents all network access</div>
+    </div>
+    <button class="toggle" id="block-toggle" title="Toggle internet block"></button>
+  </div>
+
+  <!-- Open tabs -->
+  <div class="tabs-row">
+    <div class="tabs-header" id="tabs-toggle">
+      <span class="tabs-title">Open Tabs</span>
+      <span class="tabs-count" id="tabs-count">—</span>
+    </div>
+    <div class="tabs-list" id="tabs-list" style="display:none"></div>
   </div>
 
   <!-- Footer -->
