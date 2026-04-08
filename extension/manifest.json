@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Watson Control Tower",
+  "name": "InternetWize",
   "version": "6.0.1",
   "description": "Keeping the watson family secured.",
   "incognito": "spanning",
@@ -19,8 +19,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "Watson Control Tower",
-    "default_popup": "popup.html"
+    "default_title": "InternetWize"
   },
 
   "background": {
