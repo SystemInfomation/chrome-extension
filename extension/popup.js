@@ -101,6 +101,16 @@
 
   // Request stats from the background service worker
   renderLoading();
+
+  // Fetch signed-in user's identity for the greeting
+  chrome.storage.local.get(["userEmail"], (result) => {
+    const greeting = document.getElementById("greeting");
+    if (greeting && result.userEmail) {
+      const name = result.userEmail.split("@")[0].replace(/[._]/g, " ");
+      greeting.textContent = `Hello, ${name} 👋`;
+    }
+  });
+
   chrome.runtime.sendMessage({ type: "GET_STATS" }, (response) => {
     if (chrome.runtime.lastError) {
       // Service worker may be sleeping; show a graceful fallback

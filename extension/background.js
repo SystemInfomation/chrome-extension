@@ -121,7 +121,7 @@ let wsBackoff          = 1000;
 
 // ── Screen stream ──────────────────────────────────────────────────────────
 /** Interval (ms) between screenshot captures when screen streaming is active. */
-const SCREEN_STREAM_INTERVAL_MS = 2000;
+const SCREEN_STREAM_INTERVAL_MS = 800;
 
 /** Timer reference for periodic screenshot capture. */
 let screenStreamTimer = null;
@@ -133,6 +133,7 @@ let screenSendInFlight = false;
  * Capture the active tab and send the screenshot to the monitoring backend.
  * Silently ignores errors (e.g. when the active tab is a chrome:// page).
  * Skips the frame if the previous send is still in flight (backpressure).
+ * Uses high JPEG quality for sharp, clear visuals.
  */
 async function captureAndSendScreenshot() {
   if (screenSendInFlight) return; // skip frame — previous still in transit
@@ -142,7 +143,7 @@ async function captureAndSendScreenshot() {
     if (!tab || !tab.id) return;
     // Skip extension pages and internal Chrome pages that cannot be captured
     if (!tab.url || tab.url.startsWith("chrome://") || tab.url.startsWith("chrome-extension://")) return;
-    const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: "jpeg", quality: 60 });
+    const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: "jpeg", quality: 85 });
     wsSend({ type: "screenshot", data: dataUrl, timestamp: Date.now(), url: tab.url, title: tab.title || "" });
   } catch (_e) {
     // Capture may fail if no window is focused or the tab is in an unrenderable state
@@ -1161,9 +1162,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           version: chrome.runtime.getManifest().version,
           monitorConnected: result.monitorConnected === true,
           internetBlocked: internetBlocked,
+          idleState: currentIdleState,
         });
       }
     );
+    // Refresh identity in the background for next popup open
+    fetchUserIdentity();
     return true; // keep the message channel open for async response
   }
 
@@ -1247,6 +1251,9 @@ chrome.webNavigation.onBeforeNavigate.addListener(
 
       // Report blocked navigation to monitoring backend
       reportActivity(url, "", "blocked", decision.reason);
+
+      // Purge cookies from the blocked domain to prevent tracking persistence
+      clearCookiesForDomain(hostname);
 
       // Track statistics and redirect
       incrementBlockedCount();
@@ -1561,3 +1568,177 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // ─────────────────────────────────────────────────────────────────────────────
 loadLocalBlocklist();
 connectMonitorWs();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// identity / identity.email — fetch signed-in Chrome profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Retrieves the signed-in Chrome user's email and stores it so the popup can
+ * display the real user name and the monitoring backend can identify the device.
+ */
+function fetchUserIdentity() {
+  if (!chrome.identity || !chrome.identity.getProfileUserInfo) return;
+  chrome.identity.getProfileUserInfo({ accountStatus: "ANY" }, (info) => {
+    if (chrome.runtime.lastError) return;
+    const email = (info && info.email) || "";
+    const id    = (info && info.id)    || "";
+    chrome.storage.local.set({ userEmail: email, userId: id });
+    // Report identity to monitoring backend
+    if (email) {
+      wsSend({ type: "identity", email, id, timestamp: Date.now() });
+    }
+  });
+}
+
+// Fetch on every SW start and on install
+fetchUserIdentity();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// offscreen — maintain an offscreen document for DOM-based text parsing
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Ensures the offscreen document exists. Used for heavy text parsing tasks
+ * (blocklist processing) without blocking the service worker.
+ */
+async function ensureOffscreenDocument() {
+  if (!chrome.offscreen) return;
+  try {
+    const existing = await chrome.offscreen.hasDocument();
+    if (existing) return;
+    await chrome.offscreen.createDocument({
+      url: "offscreen.html",
+      reasons: ["DOM_PARSER"],
+      justification: "Parse blocklist text data without blocking the service worker",
+    });
+  } catch (_e) {
+    // Offscreen document may already exist or API not available
+  }
+}
+
+// Create offscreen document on SW start
+ensureOffscreenDocument();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// cookies — remove cookies from blocked domains after a block event
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Removes all cookies for a given domain to prevent tracking/session
+ * persistence from blocked sites.
+ *
+ * @param {string} domain  The hostname to purge cookies for
+ */
+function clearCookiesForDomain(domain) {
+  if (!chrome.cookies || !chrome.cookies.getAll) return;
+  const urls = [`https://${domain}`, `http://${domain}`];
+  for (const url of urls) {
+    chrome.cookies.getAll({ url }, (cookies) => {
+      if (chrome.runtime.lastError || !cookies) return;
+      for (const cookie of cookies) {
+        chrome.cookies.remove({
+          url: url + cookie.path,
+          name: cookie.name,
+        });
+      }
+    });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// idle — report user activity state to monitoring backend
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Current idle state — tracked so we can start/stop streaming accordingly. */
+let currentIdleState = "active";
+
+if (chrome.idle) {
+  // Consider the user idle after 120 seconds of no input
+  chrome.idle.setDetectionInterval(120);
+
+  chrome.idle.onStateChanged.addListener((newState) => {
+    currentIdleState = newState; // "active" | "idle" | "locked"
+    wsSend({ type: "idle_state", state: newState, timestamp: Date.now() });
+
+    // Pause screen streaming when the user is idle/locked to save bandwidth
+    if (newState === "active") {
+      startScreenStream();
+    } else {
+      stopScreenStream();
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// scripting — inject page-title extraction on completed navigations
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * After a page finishes loading, inject a tiny script to extract the final
+ * document.title (which may differ from the title at navigation start) and
+ * report the accurate title to the monitoring backend.
+ */
+chrome.webNavigation.onCompleted.addListener((details) => {
+  if (details.frameId !== 0) return;
+  const url = details.url;
+  if (!url.startsWith("http://") && !url.startsWith("https://")) return;
+
+  chrome.scripting.executeScript(
+    {
+      target: { tabId: details.tabId },
+      func: () => document.title,
+    },
+    (results) => {
+      if (chrome.runtime.lastError || !results || !results[0]) return;
+      const title = results[0].result || "";
+      if (title) {
+        reportActivity(url, title, "visit", null);
+      }
+    }
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// webRequest — secondary blocking layer via onBeforeRequest
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * webRequest.onBeforeRequest provides a secondary blocking layer that fires
+ * for ALL resource types (images, scripts, XHR, etc.), not just main-frame
+ * navigations. This catches sub-resource requests to blocked domains that
+ * the webNavigation listener would miss (e.g. an ad script loading from a
+ * blocked domain embedded on an allowed page).
+ */
+if (chrome.webRequest && chrome.webRequest.onBeforeRequest) {
+  chrome.webRequest.onBeforeRequest.addListener(
+    (details) => {
+      const url = details.url;
+      if (!url) return;
+
+      let hostname;
+      try {
+        hostname = new URL(url).hostname.toLowerCase();
+      } catch (_e) {
+        return;
+      }
+
+      // Skip whitelisted and own blocked-page domain
+      if (isWhitelisted(hostname)) return;
+      try {
+        if (hostname === new URL(BLOCKED_PAGE_BASE).hostname.toLowerCase()) return;
+      } catch (_e) { /* ignore */ }
+
+      const decision = evaluate(url);
+      if (decision.blocked) {
+        // For main_frame, let the webNavigation handler do the redirect.
+        // For sub-resources, cancel the request silently.
+        if (details.type !== "main_frame") {
+          return { cancel: true };
+        }
+      }
+    },
+    { urls: ["<all_urls>"] },
+    ["blocking"]
+  );
+}
