@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Watson Control Tower",
-  "version": "6",
+  "version": "6.0.1",
   "description": "Keeping the watson family secured.",
   "incognito": "spanning",
 
