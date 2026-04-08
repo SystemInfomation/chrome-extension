@@ -56,29 +56,26 @@
    * }} stats
    */
   function render(stats) {
-    const statsEl = document.getElementById("stats");
-    if (statsEl) statsEl.classList.remove("loading");
-
     const el = (id) => document.getElementById(id);
 
-    if (el("version"))         el("version").textContent = "v" + (stats.version || "—");
-    if (el("blocked-today"))   el("blocked-today").textContent   = formatNumber(stats.blockedToday || 0);
-    if (el("blocked-total"))   el("blocked-total").textContent   = formatNumber(stats.blockedTotal || 0);
+    if (el("version"))       el("version").textContent       = "v" + (stats.version || "—");
+    if (el("blocked-today")) el("blocked-today").textContent = formatNumber(stats.blockedToday || 0);
+    if (el("blocked-total")) el("blocked-total").textContent = formatNumber(stats.blockedTotal || 0);
     if (el("blocklist-updated")) {
       el("blocklist-updated").textContent = `Updated ${timeAgo(stats.blocklistUpdatedAt)}`;
     }
 
-    // Monitoring status indicator
-    const pill = el("monitor-status");
-    const dot  = el("monitor-dot");
-    const txt  = el("monitor-text");
-    if (pill && dot && txt) {
+    // Monitoring status
+    const status = el("monitor-status");
+    const dot    = el("monitor-dot");
+    const txt    = el("monitor-text");
+    if (status && dot && txt) {
       if (stats.monitorConnected) {
-        pill.className = "monitor-pill monitor-on";
+        status.className = "row-val g";
         dot.style.background = "#16a34a";
         txt.textContent = "Active";
       } else {
-        pill.className = "monitor-pill monitor-off";
+        status.className = "row-val m";
         dot.style.background = "#94a3b8";
         txt.textContent = "Disconnected";
       }
@@ -86,13 +83,7 @@
 
     // Block-all toggle state
     const toggle = el("block-toggle");
-    if (toggle) {
-      if (stats.internetBlocked) {
-        toggle.classList.add("active");
-      } else {
-        toggle.classList.remove("active");
-      }
-    }
+    if (toggle) toggle.classList.toggle("active", !!stats.internetBlocked);
   }
 
   /**
