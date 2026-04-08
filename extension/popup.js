@@ -81,9 +81,6 @@
       }
     }
 
-    // Block-all toggle state
-    const toggle = el("block-toggle");
-    if (toggle) toggle.classList.toggle("active", !!stats.internetBlocked);
   }
 
   /**
@@ -127,20 +124,6 @@
     }
     if (response) render(response);
   });
-
-  // ── Block All Internet toggle ──────────────────────────────────────────
-  const blockToggle = document.getElementById("block-toggle");
-  if (blockToggle) {
-    blockToggle.addEventListener("click", () => {
-      const newState = !blockToggle.classList.contains("active");
-      chrome.runtime.sendMessage({ type: "SET_INTERNET_BLOCKED", blocked: newState }, (resp) => {
-        if (chrome.runtime.lastError) return;
-        if (resp && resp.ok) {
-          blockToggle.classList.toggle("active", resp.internetBlocked);
-        }
-      });
-    });
-  }
 
   // ── Open Tabs display ──────────────────────────────────────────────────
   const tabsToggle = document.getElementById("tabs-toggle");

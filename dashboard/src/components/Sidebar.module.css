@@ -140,6 +140,27 @@
 .statusLabel {
   font-size: 11px;
   color: var(--text-muted);
+  flex: 1;
+}
+
+.lockBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.lockBtn:hover {
+  background: var(--red-dim);
+  color: var(--red);
+  border-color: rgba(248, 113, 113, 0.25);
 }
 
 /* ── Responsive ── */

@@ -10,6 +10,8 @@
  *  - newAlertCount:       number — unseen alerts badge
  *  - clearAlerts():       reset the badge
  *  - clearLiveEntries():  empty the live feed
+ *  - internetBlocked:     boolean — whether internet is blocked on the extension
+ *  - toggleInternetBlock(): toggle the internet block on/off
  *  - backendUrl:          string — configurable backend HTTP(S) URL
  *  - setBackendUrl():     update and persist backend URL
  *  - liveScreenshot:      string|null — latest screenshot data URL from extension
@@ -50,6 +52,7 @@ export function MonitorProvider({ children }) {
   const [liveScreenshot, setLiveScreenshot]    = useState(null);
   const [screenStreamActive, setStreamActive] = useState(false);
   const [openTabs, setOpenTabs]               = useState([]);
+  const [internetBlocked, setInternetBlocked] = useState(false);
 
   const wsRef        = useRef(null);
   const reconnectRef = useRef(null);
@@ -78,6 +81,8 @@ export function MonitorProvider({ children }) {
       if (!mountedRef.current) return;
       setWsStatus("connected");
       backoffRef.current = 1000;
+      // Request current internet block status from extension
+      ws.send(JSON.stringify({ type: "get_internet_status" }));
     };
 
     ws.onmessage = (event) => {
@@ -112,6 +117,8 @@ export function MonitorProvider({ children }) {
         setLiveScreenshot(null);
       } else if (msg.type === "open_tabs" && Array.isArray(msg.tabs)) {
         setOpenTabs(msg.tabs);
+      } else if (msg.type === "internet_status") {
+        setInternetBlocked(msg.blocked === true);
       }
     };
 
@@ -174,6 +181,13 @@ export function MonitorProvider({ children }) {
     setLiveScreenshot(null);
   }, []);
 
+  const toggleInternetBlock = useCallback(() => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    const newState = !internetBlocked;
+    wsRef.current.send(JSON.stringify({ type: "set_internet_blocked", blocked: newState }));
+    setInternetBlocked(newState); // optimistic update
+  }, [internetBlocked]);
+
   return (
     <MonitorContext.Provider
       value={{
@@ -190,6 +204,8 @@ export function MonitorProvider({ children }) {
         startScreenStream,
         stopScreenStream,
         openTabs,
+        internetBlocked,
+        toggleInternetBlock,
       }}
     >
       {children}

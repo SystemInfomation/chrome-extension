@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Shield, Radio, List, AlertTriangle, Settings } from "lucide-react";
+import { Shield, Radio, List, AlertTriangle, Settings, Lock } from "lucide-react";
 import { useMonitor } from "../context/MonitorContext";
+import { usePinAuth } from "../context/PinAuthContext";
 import styles from "./Sidebar.module.css";
 
 const NAV = [
@@ -16,6 +17,7 @@ const NAV = [
 export default function Sidebar() {
   const pathname                                       = usePathname();
   const { wsStatus, extensionOnline, newAlertCount }  = useMonitor();
+  const { lock }                                       = usePinAuth();
 
   const statusColor =
     wsStatus === "connected" && extensionOnline ? "var(--green)"  :
@@ -72,6 +74,9 @@ export default function Sidebar() {
           style={{ background: statusColor }}
         />
         <span className={styles.statusLabel}>{statusLabel}</span>
+        <button className={styles.lockBtn} onClick={lock} title="Lock dashboard">
+          <Lock size={13} strokeWidth={2} />
+        </button>
       </div>
     </aside>
   );

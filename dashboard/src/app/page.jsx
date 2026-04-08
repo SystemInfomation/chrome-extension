@@ -4,6 +4,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import {
   Radio, Wifi, Globe, ShieldOff, Clock, Monitor, MonitorOff,
   Pause, Play, Trash2, Filter, Maximize2, Minimize2, ExternalLink,
+  WifiOff,
 } from "lucide-react";
 import { useMonitor } from "../context/MonitorContext";
 import styles from "./page.module.css";
@@ -13,6 +14,7 @@ export default function LiveView() {
     liveEntries, wsStatus, extensionOnline,
     liveScreenshot, screenStreamActive, startScreenStream, stopScreenStream,
     clearLiveEntries,
+    internetBlocked, toggleInternetBlock,
   } = useMonitor();
 
   const feedRef = useRef(null);
@@ -76,6 +78,39 @@ export default function LiveView() {
           )}
           <ConnectionBadge wsStatus={wsStatus} extensionOnline={extensionOnline} />
         </div>
+      </div>
+
+      {/* Block All Internet toggle */}
+      <div className={`${styles.blockPanel} ${internetBlocked ? styles.blockPanelActive : ""}`}>
+        <div className={styles.blockPanelLeft}>
+          <div className={`${styles.blockPanelIcon} ${internetBlocked ? styles.blockPanelIconActive : ""}`}>
+            {internetBlocked ? <WifiOff size={18} strokeWidth={2} /> : <Wifi size={18} strokeWidth={2} />}
+          </div>
+          <div>
+            <div className={styles.blockPanelTitle}>
+              {internetBlocked ? "Internet Blocked" : "Internet Active"}
+            </div>
+            <div className={styles.blockPanelDesc}>
+              {internetBlocked
+                ? "All internet access is currently blocked on the monitored device"
+                : "Toggle to block all internet access on the monitored device"}
+            </div>
+          </div>
+        </div>
+        <button
+          className={`${styles.blockToggle} ${internetBlocked ? styles.blockToggleActive : ""}`}
+          onClick={toggleInternetBlock}
+          disabled={wsStatus !== "connected" || !extensionOnline}
+          title={
+            wsStatus !== "connected" || !extensionOnline
+              ? "Extension must be online to toggle internet block"
+              : internetBlocked
+                ? "Unblock internet access"
+                : "Block all internet access"
+          }
+        >
+          <span className={styles.blockToggleKnob} />
+        </button>
       </div>
 
       {/* Live Screen panel */}
