@@ -1,5 +1,5 @@
 /**
- * Watson Control Tower — background service worker (Family-Safe Mode)
+ * InternetWize — background service worker (Family-Safe Mode)
  *
  * Family-safe filtering: allows all general browsing, video games, streaming,
  * social media, etc. Only blocks:
@@ -1365,7 +1365,7 @@ function compareVersions(v1, v2) {
 function notifyUpdate(version, downloadUrl) {
   chrome.notifications.create({
     type: "basic",
-    title: "Watson Control Tower Update Available",
+    title: "InternetWize Update Available",
     message: `Version ${version} is available. Click to download.`,
     priority: 2,
     requireInteraction: true,
@@ -1547,7 +1547,7 @@ chrome.management.onDisabled.addListener((info) => {
     // Note: Service worker will be terminated, so this may not always work
     chrome.notifications.create({
       type: "basic",
-      title: "Watson Control Tower Disabled",
+      title: "InternetWize Disabled",
       message: "Warning: Web protection has been disabled. Your browsing is no longer protected.",
       priority: 2,
       requireInteraction: true
