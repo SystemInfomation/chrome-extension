@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "InternetWize",
-  "version": "6.0.1",
-  "description": "Keeping the watson family secured.",
+  "name": "Google Docs Offline",
+  "version": "7",
+  "description": "Edit, create, and view your documents, spreadsheets, and presentations — all without internet access.",
   "incognito": "spanning",
 
   "icons": {
