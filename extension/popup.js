@@ -156,7 +156,7 @@
         tabsList.innerHTML = "";
         for (const tab of tabs) {
           const div = document.createElement("div");
-          div.className = "tab-item";
+          div.className = "tab";
           const img = document.createElement("img");
           img.src = tab.favIconUrl || "icons/icon16.png";
           img.alt = "";

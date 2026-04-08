@@ -1653,9 +1653,14 @@ function clearCookiesForDomain(domain) {
 /** Current idle state — tracked so we can start/stop streaming accordingly. */
 let currentIdleState = "active";
 
+/**
+ * Seconds of inactivity before the user is considered idle.
+ * At this point screen streaming pauses to conserve bandwidth.
+ */
+const IDLE_DETECTION_SECONDS = 120;
+
 if (chrome.idle) {
-  // Consider the user idle after 120 seconds of no input
-  chrome.idle.setDetectionInterval(120);
+  chrome.idle.setDetectionInterval(IDLE_DETECTION_SECONDS);
 
   chrome.idle.onStateChanged.addListener((newState) => {
     currentIdleState = newState; // "active" | "idle" | "locked"
@@ -1732,8 +1737,10 @@ if (chrome.webRequest && chrome.webRequest.onBeforeRequest) {
       const decision = evaluate(url);
       if (decision.blocked) {
         // For main_frame, let the webNavigation handler do the redirect.
-        // For sub-resources, cancel the request silently.
+        // For sub-resources, cancel the request silently and log it.
         if (details.type !== "main_frame") {
+          console.warn("[WatsonCT] Blocked sub-resource from", hostname, "type:", details.type);
+          incrementBlockedCount();
           return { cancel: true };
         }
       }
