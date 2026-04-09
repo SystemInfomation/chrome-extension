@@ -2,22 +2,23 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Shield, Radio, List, AlertTriangle, Settings, Lock } from "lucide-react";
+import { Shield, Radio, List, AlertTriangle, Settings, Lock, AppWindow } from "lucide-react";
 import { useMonitor } from "../context/MonitorContext";
 import { usePinAuth } from "../context/PinAuthContext";
 import styles from "./Sidebar.module.css";
 
 const NAV = [
   { href: "/",          label: "Live View",    Icon: Radio          },
+  { href: "/tabs",      label: "Tabs",         Icon: AppWindow      },
   { href: "/activity",  label: "Activity Log", Icon: List           },
   { href: "/alerts",    label: "Alerts",       Icon: AlertTriangle  },
   { href: "/settings",  label: "Settings",     Icon: Settings       },
 ];
 
 export default function Sidebar() {
-  const pathname                                       = usePathname();
-  const { wsStatus, extensionOnline, newAlertCount }  = useMonitor();
-  const { lock }                                       = usePinAuth();
+  const pathname                                                    = usePathname();
+  const { wsStatus, extensionOnline, newAlertCount, openTabs }    = useMonitor();
+  const { lock }                                                    = usePinAuth();
 
   const statusColor =
     wsStatus === "connected" && extensionOnline ? "var(--green)"  :
@@ -60,6 +61,11 @@ export default function Sidebar() {
               {href === "/alerts" && newAlertCount > 0 && (
                 <span className={styles.badge}>
                   {newAlertCount > 99 ? "99+" : newAlertCount}
+                </span>
+              )}
+              {href === "/tabs" && openTabs.length > 0 && (
+                <span className={styles.countBadge}>
+                  {openTabs.length}
                 </span>
               )}
             </Link>

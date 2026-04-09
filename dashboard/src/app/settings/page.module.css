@@ -198,3 +198,100 @@
   .urlRow, .addRow { flex-direction: column; }
   .btn { justify-content: center; }
 }
+
+/* ── Focus Mode Panel ── */
+
+.focusPanel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  gap: 16px;
+  transition: border-color 0.25s, background 0.25s;
+}
+
+.focusPanelActive {
+  border-color: rgba(167, 139, 250, 0.35);
+  background: rgba(167, 139, 250, 0.06);
+}
+
+.focusPanelLeft {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.focusPanelIcon {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius);
+  background: var(--purple-dim);
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--purple);
+  flex-shrink: 0;
+  transition: background 0.25s;
+}
+
+.focusPanelIconActive {
+  background: rgba(167, 139, 250, 0.25);
+  box-shadow: 0 0 12px rgba(167, 139, 250, 0.3);
+}
+
+.focusPanelTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.focusPanelDesc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.focusToggle {
+  width: 44px;
+  height: 24px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  position: relative;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.focusToggle:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.focusToggleActive {
+  background: var(--purple);
+  border-color: var(--purple);
+}
+
+.focusToggleKnob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  transition: transform 0.2s;
+}
+
+.focusToggleActive .focusToggleKnob {
+  transform: translateX(20px);
+}

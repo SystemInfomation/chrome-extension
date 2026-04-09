@@ -287,7 +287,21 @@ setInterval(() => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const app = express();
-app.use(express.json());
+
+// Limit request body size to prevent DoS via large payloads
+app.use(express.json({ limit: "1mb" }));
+
+// Disable X-Powered-By header to reduce information leakage
+app.disable("x-powered-by");
+
+// Security headers — applied to every response
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  next();
+});
 
 // CORS — allow all origins (private deployment, no auth needed)
 app.use((_req, res, next) => {
@@ -537,7 +551,7 @@ app.get("/", (_req, res) => res.json({ status: "ok", service: "Watson Control To
 // ─────────────────────────────────────────────────────────────────────────────
 
 const server = http.createServer(app);
-const wss    = new WebSocketServer({ server, path: "/ws" });
+const wss    = new WebSocketServer({ server, path: "/ws", maxPayload: 5 * 1024 * 1024 }); // 5 MB max (screenshots are large)
 
 /**
  * Connected clients, tagged by role.
@@ -684,6 +698,43 @@ wss.on("connection", (ws, req) => {
       // Extension reporting internet block status — forward to dashboards
       if (role === "extension") {
         broadcast({ type: "internet_status", blocked: msg.blocked === true }, "dashboard");
+      }
+
+    // ── Tab management ─────────────────────────────────────────────────────
+    } else if (msg.type === "close_tab") {
+      // Dashboard requesting to close a specific tab — forward to extension(s)
+      if (role === "dashboard" && typeof msg.tabId === "number") {
+        broadcast({ type: "close_tab", tabId: msg.tabId }, "extension");
+      }
+
+    // ── Focus Mode ─────────────────────────────────────────────────────────
+    } else if (msg.type === "set_focus_mode") {
+      // Dashboard toggling focus mode — forward to extension(s)
+      if (role === "dashboard") {
+        broadcast({
+          type: "set_focus_mode",
+          enabled: msg.enabled === true,
+          allowedDomains: Array.isArray(msg.allowedDomains) ? msg.allowedDomains : [],
+        }, "extension");
+      }
+    } else if (msg.type === "update_focus_domains") {
+      // Dashboard updating focus mode allowed domains — forward to extension(s)
+      if (role === "dashboard" && Array.isArray(msg.allowedDomains)) {
+        broadcast({ type: "update_focus_domains", allowedDomains: msg.allowedDomains }, "extension");
+      }
+    } else if (msg.type === "get_focus_mode") {
+      // Dashboard requesting current focus mode state — forward to extension(s)
+      if (role === "dashboard") {
+        broadcast({ type: "get_focus_mode" }, "extension");
+      }
+    } else if (msg.type === "focus_mode_status") {
+      // Extension reporting focus mode state — forward to dashboards
+      if (role === "extension") {
+        broadcast({
+          type: "focus_mode_status",
+          enabled: msg.enabled === true,
+          allowedDomains: Array.isArray(msg.allowedDomains) ? msg.allowedDomains : [],
+        }, "dashboard");
       }
     }
   });
