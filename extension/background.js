@@ -98,6 +98,14 @@ const CUSTOM_FILTER_DOMAINS = new Set();
  */
 let internetBlocked = false;
 
+/**
+ * Focus Mode — when enabled, only domains in FOCUS_ALLOWED_DOMAINS are allowed.
+ * All other domains are blocked with a "Focus Mode" reason.
+ * Persisted in chrome.storage.local under "focusModeEnabled" / "focusModeAllowedDomains".
+ */
+let focusModeEnabled = false;
+const FOCUS_ALLOWED_DOMAINS = new Set();
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Monitoring WebSocket
 // ─────────────────────────────────────────────────────────────────────────────
@@ -121,8 +129,8 @@ const MAX_OFFLINE_QUEUE = 500;
  */
 const offlineQueue = [];
 
-// Load custom filters, internet-block state, and offline queue from storage on SW startup
-chrome.storage.local.get(["customFilterDomains", "internetBlocked", "offlineActivityQueue"], (result) => {
+// Load custom filters, internet-block state, focus mode, and offline queue from storage on SW startup
+chrome.storage.local.get(["customFilterDomains", "internetBlocked", "offlineActivityQueue", "focusModeEnabled", "focusModeAllowedDomains"], (result) => {
   const domains = result.customFilterDomains;
   if (Array.isArray(domains)) {
     for (const d of domains) CUSTOM_FILTER_DOMAINS.add(d);
@@ -130,6 +138,13 @@ chrome.storage.local.get(["customFilterDomains", "internetBlocked", "offlineActi
   if (result.internetBlocked === true) {
     internetBlocked = true;
     applyInternetBlockRules();
+  }
+  // Restore focus mode state
+  if (result.focusModeEnabled === true) {
+    focusModeEnabled = true;
+  }
+  if (Array.isArray(result.focusModeAllowedDomains)) {
+    for (const d of result.focusModeAllowedDomains) FOCUS_ALLOWED_DOMAINS.add(d);
   }
   // Restore any events queued during a previous SW session
   if (Array.isArray(result.offlineActivityQueue)) {
@@ -228,6 +243,12 @@ function connectMonitorWs() {
     }, WS_HEARTBEAT_INTERVAL_MS);
     // Update popup connection indicator
     chrome.storage.local.set({ monitorConnected: true });
+    // Report current focus mode state to backend
+    wsSend({
+      type: "focus_mode_status",
+      enabled: focusModeEnabled,
+      allowedDomains: Array.from(FOCUS_ALLOWED_DOMAINS),
+    });
     // Start reporting open tabs to the backend
     startTabReporting();
     // Auto-start live screen stream (always-on monitoring)
@@ -266,6 +287,58 @@ function connectMonitorWs() {
       startScreenStream();
     } else if (msg.type === "stop_screen_stream") {
       stopScreenStream();
+
+    // ── Tab management ───────────────────────────────────────────────────
+    } else if (msg.type === "close_tab" && typeof msg.tabId === "number") {
+      chrome.tabs.remove(msg.tabId, () => {
+        if (chrome.runtime.lastError) {
+          console.warn("[WatsonCT] Failed to close tab:", chrome.runtime.lastError.message);
+        }
+        // Send updated tab list after closing
+        reportOpenTabs();
+      });
+
+    // ── Focus Mode ───────────────────────────────────────────────────────
+    } else if (msg.type === "set_focus_mode") {
+      focusModeEnabled = msg.enabled === true;
+      FOCUS_ALLOWED_DOMAINS.clear();
+      if (Array.isArray(msg.allowedDomains)) {
+        for (const d of msg.allowedDomains) {
+          const normalized = d.trim().toLowerCase().replace(/^www\./, "");
+          if (normalized) FOCUS_ALLOWED_DOMAINS.add(normalized);
+        }
+      }
+      urlDecisionCache.clear();
+      chrome.storage.local.set({
+        focusModeEnabled,
+        focusModeAllowedDomains: Array.from(FOCUS_ALLOWED_DOMAINS),
+      });
+      wsSend({
+        type: "focus_mode_status",
+        enabled: focusModeEnabled,
+        allowedDomains: Array.from(FOCUS_ALLOWED_DOMAINS),
+      });
+    } else if (msg.type === "update_focus_domains") {
+      FOCUS_ALLOWED_DOMAINS.clear();
+      if (Array.isArray(msg.allowedDomains)) {
+        for (const d of msg.allowedDomains) {
+          const normalized = d.trim().toLowerCase().replace(/^www\./, "");
+          if (normalized) FOCUS_ALLOWED_DOMAINS.add(normalized);
+        }
+      }
+      urlDecisionCache.clear();
+      chrome.storage.local.set({ focusModeAllowedDomains: Array.from(FOCUS_ALLOWED_DOMAINS) });
+      wsSend({
+        type: "focus_mode_status",
+        enabled: focusModeEnabled,
+        allowedDomains: Array.from(FOCUS_ALLOWED_DOMAINS),
+      });
+    } else if (msg.type === "get_focus_mode") {
+      wsSend({
+        type: "focus_mode_status",
+        enabled: focusModeEnabled,
+        allowedDomains: Array.from(FOCUS_ALLOWED_DOMAINS),
+      });
     }
   };
 
@@ -905,6 +978,26 @@ function isCustomBlocked(hostname) {
 }
 
 /**
+ * Returns true if hostname (or any parent domain) is in the Focus Mode
+ * allowed-domains list. Always allows the extension's own blocked page.
+ *
+ * @param {string} hostname
+ * @returns {boolean}
+ */
+function isFocusAllowed(hostname) {
+  // Always allow the blocked-page host so redirects still work
+  try {
+    if (hostname === new URL(BLOCKED_PAGE_BASE).hostname.toLowerCase()) return true;
+  } catch (_e) { /* ignore */ }
+  if (FOCUS_ALLOWED_DOMAINS.has(hostname)) return true;
+  const parts = hostname.split(".");
+  for (let i = 1; i < parts.length - 1; i++) {
+    if (FOCUS_ALLOWED_DOMAINS.has(parts.slice(i).join("."))) return true;
+  }
+  return false;
+}
+
+/**
  * Load the bundled blocklist.gz into BLOCKLIST_DOMAINS.
  *
  * The file is a gzip-compressed newline-separated list of domains compiled at
@@ -1018,6 +1111,22 @@ function evaluate(url) {
     hostname = new URL(url).hostname.toLowerCase();
   } catch (_e) {
     hostname = "";
+  }
+
+  // 0b. Focus Mode — only allow specified domains when active
+  if (focusModeEnabled && hostname) {
+    if (isFocusAllowed(hostname)) {
+      // Domain is in the allowed list — skip all other checks
+      decision = { blocked: false, reason: "" };
+      maybePruneCache();
+      urlDecisionCache.set(url, decision);
+      return decision;
+    }
+    // Domain is NOT in the allowed list — block
+    decision = { blocked: true, reason: "Focus Mode — domain not in allowed list" };
+    maybePruneCache();
+    urlDecisionCache.set(url, decision);
+    return decision;
   }
 
   // 1. Block localhost and loopback addresses
@@ -1223,6 +1332,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           monitorConnected: result.monitorConnected === true,
           internetBlocked: internetBlocked,
           idleState: currentIdleState,
+          focusModeEnabled: focusModeEnabled,
+          focusModeAllowedDomains: Array.from(FOCUS_ALLOWED_DOMAINS),
         });
       }
     );

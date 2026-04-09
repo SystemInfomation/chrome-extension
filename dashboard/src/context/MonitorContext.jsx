@@ -18,6 +18,11 @@
  *  - screenStreamActive:  boolean — whether live screen stream is running
  *  - startScreenStream(): ask the extension to start sending screenshots
  *  - stopScreenStream():  ask the extension to stop sending screenshots
+ *  - openTabs:            Tab[] — open browser tabs on the monitored device
+ *  - closeTab(tabId):     close a tab on the monitored device
+ *  - focusMode:           { enabled: boolean, allowedDomains: string[] }
+ *  - setFocusMode():      enable/disable focus mode with allowed domains
+ *  - updateFocusDomains(): update just the allowed domains list
  */
 
 import {
@@ -53,6 +58,7 @@ export function MonitorProvider({ children }) {
   const [screenStreamActive, setStreamActive] = useState(false);
   const [openTabs, setOpenTabs]               = useState([]);
   const [internetBlocked, setInternetBlocked] = useState(false);
+  const [focusMode, setFocusModeState]        = useState({ enabled: false, allowedDomains: [] });
 
   const wsRef        = useRef(null);
   const reconnectRef = useRef(null);
@@ -83,6 +89,8 @@ export function MonitorProvider({ children }) {
       backoffRef.current = 1000;
       // Request current internet block status from extension
       ws.send(JSON.stringify({ type: "get_internet_status" }));
+      // Request current focus mode status from extension
+      ws.send(JSON.stringify({ type: "get_focus_mode" }));
     };
 
     ws.onmessage = (event) => {
@@ -119,6 +127,11 @@ export function MonitorProvider({ children }) {
         setOpenTabs(msg.tabs);
       } else if (msg.type === "internet_status") {
         setInternetBlocked(msg.blocked === true);
+      } else if (msg.type === "focus_mode_status") {
+        setFocusModeState({
+          enabled: msg.enabled === true,
+          allowedDomains: Array.isArray(msg.allowedDomains) ? msg.allowedDomains : [],
+        });
       }
     };
 
@@ -188,6 +201,36 @@ export function MonitorProvider({ children }) {
     setInternetBlocked(newState); // optimistic update
   }, [internetBlocked]);
 
+  // ── Tab management ──────────────────────────────────────────────────────
+
+  const closeTab = useCallback((tabId) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    wsRef.current.send(JSON.stringify({ type: "close_tab", tabId }));
+    // Optimistic removal
+    setOpenTabs((prev) => prev.filter((t) => t.id !== tabId));
+  }, []);
+
+  // ── Focus Mode controls ─────────────────────────────────────────────────
+
+  const setFocusMode = useCallback((enabled, allowedDomains) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    wsRef.current.send(JSON.stringify({
+      type: "set_focus_mode",
+      enabled,
+      allowedDomains: allowedDomains || [],
+    }));
+    setFocusModeState({ enabled, allowedDomains: allowedDomains || [] }); // optimistic
+  }, []);
+
+  const updateFocusDomains = useCallback((allowedDomains) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    wsRef.current.send(JSON.stringify({
+      type: "update_focus_domains",
+      allowedDomains,
+    }));
+    setFocusModeState((prev) => ({ ...prev, allowedDomains })); // optimistic
+  }, []);
+
   return (
     <MonitorContext.Provider
       value={{
@@ -204,8 +247,12 @@ export function MonitorProvider({ children }) {
         startScreenStream,
         stopScreenStream,
         openTabs,
+        closeTab,
         internetBlocked,
         toggleInternetBlock,
+        focusMode,
+        setFocusMode,
+        updateFocusDomains,
       }}
     >
       {children}
