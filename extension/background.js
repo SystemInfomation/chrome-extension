@@ -98,23 +98,6 @@ const CUSTOM_FILTER_DOMAINS = new Set();
  */
 let internetBlocked = false;
 
-// Load custom filters, internet-block state, and offline queue from storage on SW startup
-chrome.storage.local.get(["customFilterDomains", "internetBlocked", "offlineActivityQueue"], (result) => {
-  const domains = result.customFilterDomains;
-  if (Array.isArray(domains)) {
-    for (const d of domains) CUSTOM_FILTER_DOMAINS.add(d);
-  }
-  if (result.internetBlocked === true) {
-    internetBlocked = true;
-    applyInternetBlockRules();
-  }
-  // Restore any events queued during a previous SW session
-  if (Array.isArray(result.offlineActivityQueue)) {
-    const restored = result.offlineActivityQueue.slice(-MAX_OFFLINE_QUEUE);
-    offlineQueue.push(...restored);
-  }
-});
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Monitoring WebSocket
 // ─────────────────────────────────────────────────────────────────────────────
@@ -132,9 +115,28 @@ const MAX_OFFLINE_QUEUE = 500;
 /**
  * Events queued while the monitoring WebSocket is disconnected.
  * Flushed to the backend when the connection is re-established.
+ * Declared here (before the storage restore below) so the callback always
+ * finds the array ready regardless of async scheduling.
  * @type {Array<object>}
  */
 const offlineQueue = [];
+
+// Load custom filters, internet-block state, and offline queue from storage on SW startup
+chrome.storage.local.get(["customFilterDomains", "internetBlocked", "offlineActivityQueue"], (result) => {
+  const domains = result.customFilterDomains;
+  if (Array.isArray(domains)) {
+    for (const d of domains) CUSTOM_FILTER_DOMAINS.add(d);
+  }
+  if (result.internetBlocked === true) {
+    internetBlocked = true;
+    applyInternetBlockRules();
+  }
+  // Restore any events queued during a previous SW session
+  if (Array.isArray(result.offlineActivityQueue)) {
+    const restored = result.offlineActivityQueue.slice(-MAX_OFFLINE_QUEUE);
+    offlineQueue.push(...restored);
+  }
+});
 
 // ── Screen stream ──────────────────────────────────────────────────────────
 /** Interval (ms) between screenshot captures when screen streaming is active. */
@@ -214,7 +216,8 @@ function connectMonitorWs() {
     // Flush any activity events that were queued while the WS was disconnected
     if (offlineQueue.length > 0) {
       const toFlush = offlineQueue.splice(0);
-      persistOfflineQueue();
+      // Remove persisted queue from storage so it isn't replayed on the next SW restart
+      chrome.storage.local.remove("offlineActivityQueue");
       for (const payload of toFlush) {
         wsSend(payload);
       }
@@ -1501,8 +1504,12 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     }
     performUpdateCheck();
   } else if (alarm.name === "keepAlive") {
-    // Re-establish the WebSocket if it was dropped while the SW was sleeping
-    if (!monitorWs || monitorWs.readyState === WebSocket.CLOSED || monitorWs.readyState === WebSocket.CLOSING) {
+    // Re-establish the WebSocket if it has dropped (not already connecting)
+    if (
+      !monitorWs ||
+      monitorWs.readyState === WebSocket.CLOSED ||
+      monitorWs.readyState === WebSocket.CLOSING
+    ) {
       clearTimeout(wsReconnectTimer);
       connectMonitorWs();
     }
