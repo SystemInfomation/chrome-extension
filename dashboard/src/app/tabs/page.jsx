@@ -134,7 +134,9 @@ export default function TabsPage() {
 
 function TabRow({ tab, onClose, canClose }) {
   const domain = extractDomain(tab.url);
-  const faviconUrl = tab.favIconUrl || `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+  // Sanitize domain for use in URL — only allow valid hostname chars
+  const safeDomain = domain.replace(/[^a-zA-Z0-9.-]/g, "");
+  const faviconUrl = tab.favIconUrl || `https://www.google.com/s2/favicons?domain=${encodeURIComponent(safeDomain)}&sz=32`;
   const isInternal = (tab.url || "").startsWith("chrome://") || (tab.url || "").startsWith("chrome-extension://");
 
   return (

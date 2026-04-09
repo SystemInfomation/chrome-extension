@@ -263,7 +263,9 @@ export default function SettingsPage() {
           <form className={styles.addRow} onSubmit={(e) => {
             e.preventDefault();
             const domain = focusDomain.trim().toLowerCase().replace(/^www\./, "");
-            if (!domain || !domain.includes(".")) return;
+            // Validate domain: must have at least one dot, valid hostname chars, and proper structure
+            const domainRegex = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+            if (!domain || !domainRegex.test(domain)) return;
             setAddingFocus(true);
             const newList = [...focusMode.allowedDomains.filter((d) => d !== domain), domain];
             updateFocusDomains(newList);
