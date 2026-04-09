@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  AppWindow, X, Globe, ExternalLink, RefreshCw, Search,
+  AppWindow, X, Globe, ExternalLink, Search,
 } from "lucide-react";
 import { useMonitor } from "../../context/MonitorContext";
 import styles from "./page.module.css";
