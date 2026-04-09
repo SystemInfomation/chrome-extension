@@ -98,8 +98,8 @@ const CUSTOM_FILTER_DOMAINS = new Set();
  */
 let internetBlocked = false;
 
-// Load custom filters and internet-block state from storage on SW startup
-chrome.storage.local.get(["customFilterDomains", "internetBlocked"], (result) => {
+// Load custom filters, internet-block state, and offline queue from storage on SW startup
+chrome.storage.local.get(["customFilterDomains", "internetBlocked", "offlineActivityQueue"], (result) => {
   const domains = result.customFilterDomains;
   if (Array.isArray(domains)) {
     for (const d of domains) CUSTOM_FILTER_DOMAINS.add(d);
@@ -107,6 +107,11 @@ chrome.storage.local.get(["customFilterDomains", "internetBlocked"], (result) =>
   if (result.internetBlocked === true) {
     internetBlocked = true;
     applyInternetBlockRules();
+  }
+  // Restore any events queued during a previous SW session
+  if (Array.isArray(result.offlineActivityQueue)) {
+    const restored = result.offlineActivityQueue.slice(-MAX_OFFLINE_QUEUE);
+    offlineQueue.push(...restored);
   }
 });
 
@@ -118,6 +123,18 @@ let monitorWs          = null;
 let wsReconnectTimer   = null;
 let wsHeartbeatTimer   = null;
 let wsBackoff          = 1000;
+
+// ── Offline activity queue ─────────────────────────────────────────────────
+
+/** Maximum number of activity events to buffer while the WS is disconnected. */
+const MAX_OFFLINE_QUEUE = 500;
+
+/**
+ * Events queued while the monitoring WebSocket is disconnected.
+ * Flushed to the backend when the connection is re-established.
+ * @type {Array<object>}
+ */
+const offlineQueue = [];
 
 // ── Screen stream ──────────────────────────────────────────────────────────
 /** Interval (ms) between screenshot captures when screen streaming is active. */
@@ -193,6 +210,14 @@ function connectMonitorWs() {
     // Send current custom filters to backend for syncing
     if (CUSTOM_FILTER_DOMAINS.size > 0) {
       wsSend({ type: "filters_sync", filters: Array.from(CUSTOM_FILTER_DOMAINS) });
+    }
+    // Flush any activity events that were queued while the WS was disconnected
+    if (offlineQueue.length > 0) {
+      const toFlush = offlineQueue.splice(0);
+      persistOfflineQueue();
+      for (const payload of toFlush) {
+        wsSend(payload);
+      }
     }
     // Heartbeat every 30 s to keep connection alive through Render's idle timeout
     wsHeartbeatTimer = setInterval(() => {
@@ -270,8 +295,16 @@ function wsSend(payload) {
   }
 }
 
+/** Persist the offline activity queue to chrome.storage.local. */
+function persistOfflineQueue() {
+  chrome.storage.local.set({ offlineActivityQueue: offlineQueue });
+}
+
 /**
  * Report a navigation event (visit or block) to the monitoring backend.
+ * If the WebSocket is not connected the event is queued locally and flushed
+ * automatically when the connection is re-established, ensuring no URL is
+ * ever silently dropped.
  *
  * @param {string}           url
  * @param {string}           title
@@ -279,14 +312,24 @@ function wsSend(payload) {
  * @param {string|null}      reason
  */
 function reportActivity(url, title, action, reason) {
-  wsSend({
+  const payload = {
     type:      "activity",
     url,
     title:     title || "",
     action,
     reason:    reason || null,
     timestamp: Date.now(),
-  });
+  };
+  if (monitorWs && monitorWs.readyState === WebSocket.OPEN) {
+    wsSend(payload);
+  } else {
+    // Backend unreachable — buffer the event for delivery on reconnect
+    if (offlineQueue.length >= MAX_OFFLINE_QUEUE) {
+      offlineQueue.shift(); // drop the oldest entry to stay within the cap
+    }
+    offlineQueue.push(payload);
+    persistOfflineQueue();
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1457,6 +1500,12 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       setupUpdateInterval();
     }
     performUpdateCheck();
+  } else if (alarm.name === "keepAlive") {
+    // Re-establish the WebSocket if it was dropped while the SW was sleeping
+    if (!monitorWs || monitorWs.readyState === WebSocket.CLOSED || monitorWs.readyState === WebSocket.CLOSING) {
+      clearTimeout(wsReconnectTimer);
+      connectMonitorWs();
+    }
   }
 });
 
@@ -1582,6 +1631,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // ─────────────────────────────────────────────────────────────────────────────
 loadLocalBlocklist();
 connectMonitorWs();
+
+// Ensure the keep-alive alarm exists so the WS is reconnected even after
+// the service worker is suspended and woken by an unrelated event.
+chrome.alarms.create("keepAlive", { periodInMinutes: 1 });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // identity / identity.email — fetch signed-in Chrome profile
