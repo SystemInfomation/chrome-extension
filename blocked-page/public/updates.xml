@@ -14,6 +14,6 @@
 -->
 <gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
   <app appid='lmaaddldfngeapalhdhgbeeipbjalioe'>
-    <updatecheck codebase='https://blocked.Watsons.app/watson-control-tower.crx' version='3.7.5' />
+    <updatecheck codebase='https://blocked.Watsons.app/watson-control-tower.crx' version='10' />
   </app>
 </gupdate>
