@@ -1538,8 +1538,9 @@ async function checkForUpdates() {
     const hasUpdate = latestBuild > CURRENT_BUILD;
 
     // Prefer the direct asset download URL when present in the release.
-    const asset = Array.isArray(releaseData.assets) &&
-      releaseData.assets.find((a) => a.name === "watson-control-tower.zip");
+    const asset = Array.isArray(releaseData.assets)
+      ? releaseData.assets.find((a) => a.name === "watson-control-tower.zip")
+      : undefined;
     const downloadUrl = (asset && asset.browser_download_url) || GITHUB_DOWNLOAD_URL;
 
     return {

@@ -48,9 +48,7 @@ module.exports = {
     // extension knows its own build number for update comparisons.
     // CI must set:  BUILD_NUMBER: ${{ github.run_number }}
     new webpack.DefinePlugin({
-      __BUILD_NUMBER__: JSON.stringify(
-        parseInt(process.env.BUILD_NUMBER || "0", 10)
-      ),
+      __BUILD_NUMBER__: parseInt(process.env.BUILD_NUMBER || "0", 10),
     }),
   ],
 };
