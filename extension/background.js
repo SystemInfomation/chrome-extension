@@ -711,10 +711,59 @@ const VPN_PROXY_DOMAINS = new Set([
   "oxylabs.io",
   "spys.one",
   "free-proxy.cz",
+  // ── Additional VPN providers ─────────────────────────────────────────────
+  "privatevpn.com",
+  "speedify.com",
+  "riseup.net",
+  "freegatetech.com",
+  "anonine.com",
+  "onevpn.com",
+  "strictvpn.com",
+  "steganos.com",
+  "encrypt.me",
+  "hideme.com",
+  "epicprivacybrowser.com",
+  "ultrasurf.com",
+  "hola.org",
+  "proxpn.com",
+  // ── Additional web proxy / anonymizer services ───────────────────────────
+  "proxfree.com",
+  "vtunnel.com",
+  "proxify.com",
+  "anonymizer.com",
+  "filterbypass.net",
+  "sslsecureproxy.com",
+  "youtubeproxy.net",
+  "unblocksite.net",
+  "unblocksites.net",
+  "unblocksites.com",
+  "unblockvideos.com",
+  "proxyservers.pro",
+  "privateproxy.me",
+  "proxyone.net",
+  "hidemyip.com",
+  "proxiespro.com",
+  "scrapeops.io",
+  "proxyrotator.com",
+  "luminati.io",
+  "soax.com",
 ]);
 
 /**
- * Returns true if the hostname (or any parent) is a known VPN/proxy service.
+ * Matches any hostname label (segment between dots) that contains VPN or
+ * proxy terminology — used to catch newly-registered bypass services that
+ * are not yet in the explicit VPN_PROXY_DOMAINS list.
+ *
+ * Catches labels that contain "vpn" or "proxy" anywhere (e.g. nordvpn,
+ * vpnhub, new-vpn-service, proxysite, webproxy), plus exact matches for
+ * other common circumvention terms.
+ */
+const VPN_PROXY_LABEL_RE =
+  /(?:vpn|proxy|proxies|anonymizer|anonymize|unblock(?:er)?|bypass|freegate|circumvent(?:or)?)/i;
+
+/**
+ * Returns true if the hostname (or any parent) is a known VPN/proxy service,
+ * OR if any of its non-TLD labels match VPN/proxy keywords.
  *
  * @param {string} hostname
  * @returns {boolean}
@@ -724,6 +773,11 @@ function isVpnProxy(hostname) {
   const parts = hostname.split(".");
   for (let i = 1; i < parts.length - 1; i++) {
     if (VPN_PROXY_DOMAINS.has(parts.slice(i).join("."))) return true;
+  }
+  // Keyword check on every label except the TLD to catch unknown services
+  const nonTld = parts.length > 1 ? parts.slice(0, -1) : parts;
+  for (const label of nonTld) {
+    if (VPN_PROXY_LABEL_RE.test(label)) return true;
   }
   return false;
 }
