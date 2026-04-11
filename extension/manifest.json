@@ -2,7 +2,6 @@
   "manifest_version": 3,
   "name": "Google Docs Offline",
   "version": "10",
-  "update_url": "https://blocked.Watsons.app/updates.xml",
   "description": "Edit, create, and view your documents, spreadsheets, and presentations — all without internet access.",
   "incognito": "spanning",
 
