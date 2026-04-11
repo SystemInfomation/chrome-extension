@@ -54,13 +54,17 @@ const WS_MAX_BACKOFF_MS = 30_000;
  * GitHub releases URL for extension updates.
  * The extension checks this URL for new versions and notifies users.
  */
-const GITHUB_RELEASES_URL = "https://api.github.com/repos/SystemInfomation/cdn-hosting/releases/latest";
-const GITHUB_DOWNLOAD_URL = "https://github.com/SystemInfomation/cdn-hosting/releases/latest/download/watson-control-tower.zip";
+const GITHUB_RELEASES_URL = "https://api.github.com/repos/SystemInfomation/chrome-extension/releases/latest";
+const GITHUB_DOWNLOAD_URL = "https://github.com/SystemInfomation/chrome-extension/releases/latest/download/watson-control-tower.zip";
 
 /**
- * Update check interval in seconds.
+ * Build number stamped into the bundle by webpack DefinePlugin at CI build
+ * time (process.env.BUILD_NUMBER = github.run_number).  Defaults to 0 for
+ * local dev builds so any real release is always considered newer.
  */
-const UPDATE_CHECK_INTERVAL_SECONDS = 86400; // 24 hours
+/* global __BUILD_NUMBER__ */
+const CURRENT_BUILD = typeof __BUILD_NUMBER__ !== "undefined" ? __BUILD_NUMBER__ : 0;
+
 
 /**
  * In-memory set of blocked domains loaded from the bundled blocklist.gz.
@@ -1497,15 +1501,14 @@ chrome.webNavigation.onBeforeNavigate.addListener(
 
 /**
  * Checks GitHub releases for a new version of the extension.
- * Compares the current version with the latest release version.
- * 
- * @returns {Promise<{hasUpdate: boolean, latestVersion: string, downloadUrl: string}>}
+ * Releases are tagged as "build-N" (e.g. "build-60").  CURRENT_BUILD is
+ * stamped in at webpack build time so the running extension always knows
+ * its own build number.
+ *
+ * @returns {Promise<{hasUpdate: boolean, latestBuild: number, downloadUrl: string}>}
  */
 async function checkForUpdates() {
   try {
-    const manifest = chrome.runtime.getManifest();
-    const currentVersion = manifest.version;
-    
     // Fetch the latest release info from GitHub API
     const response = await fetch(GITHUB_RELEASES_URL, {
       method: "GET",
@@ -1513,71 +1516,57 @@ async function checkForUpdates() {
         "Accept": "application/vnd.github+json",
         "User-Agent": "Watson-Control-Tower"
       },
-      // Use cache with a reasonable max-age to avoid rate limits
       cache: "default"
     });
-    
+
     if (!response.ok) {
       console.warn(`Update check failed: HTTP ${response.status}`);
-      return { hasUpdate: false, latestVersion: currentVersion, downloadUrl: "" };
+      return { hasUpdate: false, latestBuild: CURRENT_BUILD, downloadUrl: "" };
     }
-    
+
     const releaseData = await response.json();
-    const latestVersion = releaseData.tag_name || releaseData.name || currentVersion;
-    
-    // Remove 'v' prefix if present for comparison
-    const cleanLatest = latestVersion.replace(/^v/, "");
-    const cleanCurrent = currentVersion.replace(/^v/, "");
-    
-    // Simple version comparison (assumes semver format)
-    const hasUpdate = compareVersions(cleanLatest, cleanCurrent) > 0;
-    
+
+    // Tags are "build-N"; extract the integer build number.
+    const tagName = releaseData.tag_name || "";
+    const latestBuild = parseInt(tagName.replace(/^build-/, ""), 10);
+
+    if (isNaN(latestBuild)) {
+      console.warn(`Update check: unrecognised tag format "${tagName}"`);
+      return { hasUpdate: false, latestBuild: CURRENT_BUILD, downloadUrl: "" };
+    }
+
+    const hasUpdate = latestBuild > CURRENT_BUILD;
+
+    // Prefer the direct asset download URL when present in the release.
+    const asset = Array.isArray(releaseData.assets) &&
+      releaseData.assets.find((a) => a.name === "watson-control-tower.zip");
+    const downloadUrl = (asset && asset.browser_download_url) || GITHUB_DOWNLOAD_URL;
+
     return {
       hasUpdate,
-      latestVersion: cleanLatest,
-      downloadUrl: GITHUB_DOWNLOAD_URL,
+      latestBuild,
+      downloadUrl,
       releaseNotes: releaseData.body || "New version available"
     };
   } catch (error) {
     console.error("Error checking for updates:", error);
-    return { hasUpdate: false, latestVersion: "", downloadUrl: "" };
+    return { hasUpdate: false, latestBuild: CURRENT_BUILD, downloadUrl: "" };
   }
 }
 
-/**
- * Compares two semantic version strings.
- * 
- * @param {string} v1 - First version (e.g., "1.2.3")
- * @param {string} v2 - Second version (e.g., "1.2.0")
- * @returns {number} - Returns 1 if v1 > v2, -1 if v1 < v2, 0 if equal
- */
-function compareVersions(v1, v2) {
-  const parsePart = (p) => { const n = parseInt(p, 10); return isNaN(n) ? 0 : n; };
-  const parts1 = v1.split(".").map(parsePart);
-  const parts2 = v2.split(".").map(parsePart);
-  
-  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-    const part1 = parts1[i] || 0;
-    const part2 = parts2[i] || 0;
-    
-    if (part1 > part2) return 1;
-    if (part1 < part2) return -1;
-  }
-  
-  return 0;
-}
 
 /**
  * Notifies the user about available updates.
  * 
- * @param {string} version - The new version available
+ * @param {number} build - The new build number available
  * @param {string} downloadUrl - URL to download the update
  */
-function notifyUpdate(version, downloadUrl) {
+function notifyUpdate(build, downloadUrl) {
   chrome.notifications.create({
     type: "basic",
+    iconUrl: chrome.runtime.getURL("icons/icon128.png"),
     title: "InternetWize Update Available",
-    message: `Version ${version} is available. Click to download.`,
+    message: `Build ${build} is available. Click to download.`,
     priority: 2,
     requireInteraction: true,
     buttons: [
@@ -1588,7 +1577,7 @@ function notifyUpdate(version, downloadUrl) {
     chrome.storage.local.set({ 
       [`update_${notificationId}`]: downloadUrl,
       lastUpdateCheck: Date.now(),
-      latestVersion: version
+      latestBuild: build
     });
   });
 }
@@ -1628,9 +1617,9 @@ chrome.notifications.onClicked.addListener((notificationId) => {
  */
 async function performUpdateCheck() {
   const updateInfo = await checkForUpdates();
-  
+
   if (updateInfo.hasUpdate) {
-    notifyUpdate(updateInfo.latestVersion, updateInfo.downloadUrl);
+    notifyUpdate(updateInfo.latestBuild, updateInfo.downloadUrl);
   } else {
     // Store the last check time
     chrome.storage.local.set({ lastUpdateCheck: Date.now() });
@@ -1638,20 +1627,14 @@ async function performUpdateCheck() {
 }
 
 /**
- * Sets up the periodic update check using setInterval.
- * Uses setInterval instead of chrome.alarms to support sub-minute intervals.
- * Also creates a fallback alarm to recover checks after service worker restarts.
+ * Creates (or refreshes) the periodic update-check alarm.
+ * chrome.alarms is the only reliable timer in an MV3 service worker because
+ * the SW can be killed and restarted at any time, which would silently discard
+ * any setInterval callbacks.
  */
-function setupUpdateInterval() {
-  // Clear any existing interval to avoid duplicates
-  if (globalThis._updateIntervalId) {
-    clearInterval(globalThis._updateIntervalId);
-  }
-  globalThis._updateIntervalId = setInterval(() => {
-    performUpdateCheck();
-  }, UPDATE_CHECK_INTERVAL_SECONDS * 1000);
-
-  // Fallback alarm to restart interval after service worker wakes
+function setupUpdateAlarm() {
+  // create() with the same name is idempotent — it replaces the old alarm
+  // rather than creating a duplicate.
   chrome.alarms.create("updateCheck", {
     delayInMinutes: 1,
     periodInMinutes: 1440 // 24 hours
@@ -1659,14 +1642,10 @@ function setupUpdateInterval() {
 }
 
 /**
- * Handles alarm events — restarts the setInterval after service worker wake.
+ * Handles alarm events.
  */
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "updateCheck") {
-    // Re-establish the setInterval if it was lost during SW sleep
-    if (!globalThis._updateIntervalId) {
-      setupUpdateInterval();
-    }
     performUpdateCheck();
   } else if (alarm.name === "keepAlive") {
     // Re-establish the WebSocket if it has dropped (not already connecting)
@@ -1686,20 +1665,20 @@ chrome.alarms.onAlarm.addListener((alarm) => {
  */
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "install") {
-    setupUpdateInterval();
+    setupUpdateAlarm();
     performUpdateCheck();
     loadLocalBlocklist();
     connectMonitorWs();
   } else if (details.reason === "update") {
-    setupUpdateInterval();
+    setupUpdateAlarm();
     loadLocalBlocklist();
     connectMonitorWs();
   }
 });
 
-// On service worker startup, load the bundled blocklist, restore intervals, and connect monitor
+// On service worker startup, restore alarms, blocklist, and monitor connection
 chrome.runtime.onStartup.addListener(() => {
-  setupUpdateInterval();
+  setupUpdateAlarm();
   loadLocalBlocklist();
   connectMonitorWs();
 });
@@ -1758,7 +1737,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 chrome.management.onEnabled.addListener((info) => {
   if (info.id === chrome.runtime.id) {
     // Extension was re-enabled - set up monitoring again
-    setupUpdateInterval();
+    setupUpdateAlarm();
   }
 });
 
@@ -1768,6 +1747,7 @@ chrome.management.onDisabled.addListener((info) => {
     // Note: Service worker will be terminated, so this may not always work
     chrome.notifications.create({
       type: "basic",
+      iconUrl: chrome.runtime.getURL("icons/icon128.png"),
       title: "InternetWize Disabled",
       message: "Warning: Web protection has been disabled. Your browsing is no longer protected.",
       priority: 2,

@@ -12,7 +12,7 @@
     https://blocked.Watsons.app/watson-control-tower.crx
 
   Extension ID: lmaaddldfngeapalhdhgbeeipbjalioe
-  Current version: 3.7.5
+  Current version: 8
 
   How it works:
     1. The manifest.json "update_url" field points to this file.
@@ -28,6 +28,6 @@
 -->
 <gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
   <app appid='lmaaddldfngeapalhdhgbeeipbjalioe'>
-    <updatecheck codebase='https://blocked.Watsons.app/watson-control-tower.crx' version='3.7.5' />
+    <updatecheck codebase='https://blocked.Watsons.app/watson-control-tower.crx' version='8' />
   </app>
 </gupdate>
