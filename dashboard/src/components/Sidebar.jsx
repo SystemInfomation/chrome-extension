@@ -40,7 +40,7 @@ export default function Sidebar() {
         </div>
         <div>
           <div className={styles.logoTitle}>Watson CT</div>
-          <div className={styles.logoSub}>Parent Monitor</div>
+          <div className={styles.logoSub}>Control Tower</div>
         </div>
       </div>
 
