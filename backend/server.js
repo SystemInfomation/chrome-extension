@@ -288,11 +288,18 @@ setInterval(() => {
 
 const app = express();
 
-// Limit request body size to prevent DoS via large payloads
-app.use(express.json({ limit: "1mb" }));
-
 // Disable X-Powered-By header to reduce information leakage
 app.disable("x-powered-by");
+
+// CORS — must be first so the header is present on every response, including
+// body-parse errors and global error-handler responses.
+app.use((_req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (_req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
 
 // Security headers — applied to every response
 app.use((_req, res, next) => {
@@ -303,14 +310,8 @@ app.use((_req, res, next) => {
   next();
 });
 
-// CORS — allow all origins (private deployment, no auth needed)
-app.use((_req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  if (_req.method === "OPTIONS") return res.sendStatus(204);
-  next();
-});
+// Limit request body size to prevent DoS via large payloads
+app.use(express.json({ limit: "1mb" }));
 
 // ─── GET /api/status ─────────────────────────────────────────────────────────
 app.get("/api/status", (_req, res) => {
@@ -546,6 +547,17 @@ app.delete("/api/filters/:domain", (req, res) => {
 // Health check
 app.get("/", (_req, res) => res.json({ status: "ok", service: "Watson Control Tower Monitor" }));
 
+// Global error handler — must be defined after all routes.
+// Ensures CORS headers (already set by the CORS middleware above) are preserved
+// and that Express-level errors return a structured JSON body instead of an
+// HTML stack-trace page.
+// eslint-disable-next-line no-unused-vars
+app.use((err, _req, res, _next) => {
+  console.error("[WatsonCT] Unhandled Express error:", err.message || err);
+  const status = typeof err.status === "number" ? err.status : 500;
+  res.status(status).json({ error: "internal server error" });
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HTTP + WebSocket server
 // ─────────────────────────────────────────────────────────────────────────────
@@ -773,4 +785,19 @@ async function start() {
   });
 }
 
-start();
+// Log uncaught exceptions / unhandled rejections before letting the process
+// exit so Render can restart it cleanly rather than running a broken process.
+process.on("uncaughtException", (err) => {
+  console.error("[WatsonCT] Uncaught exception — exiting for clean restart:", err);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[WatsonCT] Unhandled promise rejection — exiting for clean restart:", reason);
+  process.exit(1);
+});
+
+start().catch((err) => {
+  console.error("[WatsonCT] Fatal startup error:", err);
+  process.exit(1);
+});
