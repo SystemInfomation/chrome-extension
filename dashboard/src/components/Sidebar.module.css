@@ -3,10 +3,10 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: rgba(7, 12, 24, 0.95);
-  backdrop-filter: blur(20px);
+  background: rgba(6, 10, 18, 0.97);
+  backdrop-filter: blur(24px);
   border-right: 1px solid var(--border);
-  padding: 0 0 20px;
+  padding: 0;
   overflow-y: auto;
   z-index: 10;
 }
@@ -16,36 +16,39 @@
 .logo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 20px 16px 18px;
+  gap: 12px;
+  padding: 22px 20px 20px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .logoIcon {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border-radius: var(--radius);
-  background: linear-gradient(135deg, #0369a1, #0ea5e9);
+  background: linear-gradient(135deg, #1d4ed8, #3b82f6);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
   flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
 }
 
 .logoTitle {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.3px;
 }
 
 .logoSub {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
   margin-top: 1px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 500;
 }
 
 /* ── Navigation ── */
@@ -55,33 +58,47 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 4px 10px;
+  padding: 8px 12px;
 }
 
 .link {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 10px;
+  padding: 10px 12px;
   border-radius: var(--radius);
-  color: var(--text-secondary);
+  color: var(--text-muted);
   font-size: 13px;
   font-weight: 500;
   text-decoration: none;
-  transition: background 0.15s, color 0.15s;
+  transition: all 0.2s var(--ease-out);
   position: relative;
+  border: 1px solid transparent;
 }
 
 .link:hover {
-  background: var(--bg-elevated);
-  color: var(--text-primary);
+  background: rgba(255,255,255,0.03);
+  color: var(--text-secondary);
   text-decoration: none;
 }
 
 .link.active {
-  background: linear-gradient(135deg, rgba(14,165,233,0.15), rgba(56,189,248,0.08));
+  background: var(--accent-dim);
   color: var(--accent);
-  border: 1px solid rgba(56, 189, 248, 0.18);
+  border-color: rgba(59, 158, 255, 0.12);
+  font-weight: 600;
+}
+
+.link.active::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 
 .link.active .linkIcon {
@@ -94,12 +111,12 @@
   justify-content: center;
   width: 20px;
   flex-shrink: 0;
-  color: var(--text-muted);
-  transition: color 0.15s;
+  color: var(--text-dim);
+  transition: color 0.2s;
 }
 
 .link:hover .linkIcon {
-  color: var(--text-primary);
+  color: var(--text-secondary);
 }
 
 .linkLabel {
@@ -111,20 +128,24 @@
   color: #fff;
   font-size: 10px;
   font-weight: 700;
-  padding: 1px 6px;
+  padding: 2px 7px;
   border-radius: 99px;
-  line-height: 1.5;
-  box-shadow: 0 2px 6px rgba(248, 113, 113, 0.4);
+  line-height: 1.4;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+  min-width: 18px;
+  text-align: center;
 }
 
 .countBadge {
   font-size: 10px;
   font-weight: 600;
   color: var(--text-muted);
-  background: var(--bg-elevated);
-  padding: 1px 6px;
+  background: rgba(255,255,255,0.04);
+  padding: 2px 7px;
   border-radius: 99px;
-  line-height: 1.5;
+  line-height: 1.4;
+  min-width: 18px;
+  text-align: center;
 }
 
 /* ── Footer ── */
@@ -133,15 +154,14 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 16px 0;
+  padding: 16px 20px;
   border-top: 1px solid var(--border);
-  margin-top: 4px;
-  padding-top: 14px;
+  margin-top: auto;
 }
 
 .statusDot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
   animation: pulse 2.5s ease-in-out infinite;
@@ -151,6 +171,7 @@
   font-size: 11px;
   color: var(--text-muted);
   flex: 1;
+  font-weight: 500;
 }
 
 .lockBtn {
@@ -160,17 +181,17 @@
   width: 28px;
   height: 28px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-dim);
   flex-shrink: 0;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: all 0.2s var(--ease-out);
 }
 
 .lockBtn:hover {
   background: var(--red-dim);
   color: var(--red);
-  border-color: rgba(248, 113, 113, 0.25);
+  border-color: rgba(239, 68, 68, 0.2);
 }
 
 /* ── Responsive ── */
@@ -208,6 +229,8 @@
     font-size: 12px;
     white-space: nowrap;
   }
+
+  .link.active::before { display: none; }
 
   .footer { display: none; }
 }

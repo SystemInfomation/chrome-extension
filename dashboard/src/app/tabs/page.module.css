@@ -1,8 +1,9 @@
-/* Tabs page styles */
+/* ── Tabs — Enterprise Dashboard ── */
 
 .page {
-  padding: 28px 32px;
-  max-width: 1100px;
+  padding: 32px 36px;
+  max-width: 1140px;
+  animation: fadeSlideIn 0.3s var(--ease-out);
 }
 
 /* ── Page header ── */
@@ -11,7 +12,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
   gap: 16px;
   flex-wrap: wrap;
 }
@@ -29,11 +30,11 @@
 }
 
 .headerIcon {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, rgba(52,211,153,0.2), rgba(52,211,153,0.1));
-  border: 1px solid rgba(52,211,153,0.2);
+  background: var(--green-dim);
+  border: 1px solid rgba(34,197,94,0.15);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -41,68 +42,76 @@
 }
 
 .title {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--text-primary);
-  letter-spacing: -0.4px;
+  letter-spacing: -0.5px;
   line-height: 1.2;
 }
 
 .subtitle {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: 3px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .offlineHint {
   font-size: 12px;
   color: var(--yellow);
   background: var(--yellow-dim);
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  border: 1px solid rgba(251,191,36,0.2);
+  padding: 5px 12px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(234,179,8,0.15);
+  font-weight: 500;
 }
 
 /* ── Search ── */
 
 .searchBar {
   position: relative;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .searchIcon {
   position: absolute;
-  left: 12px;
+  left: 14px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--text-muted);
+  color: var(--text-dim);
   pointer-events: none;
 }
 
 .searchInput {
   width: 100%;
-  padding: 10px 36px 10px 34px;
-  background: var(--bg-input);
+  padding: 11px 36px 11px 38px;
+  background: rgba(255,255,255,0.02);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text-primary);
   font-size: 13px;
   font-family: var(--font);
   outline: none;
-  transition: border-color 0.15s;
+  transition: all 0.2s var(--ease-out);
 }
 
 .searchInput::placeholder { color: var(--text-muted); }
-.searchInput:focus { border-color: var(--border-focus); }
+.searchInput:focus {
+  border-color: var(--border-focus);
+  background: rgba(255,255,255,0.03);
+  box-shadow: 0 0 0 3px rgba(59,158,255,0.08);
+}
 
 .clearSearch {
   position: absolute;
-  right: 8px;
+  right: 10px;
   top: 50%;
   transform: translateY(-50%);
   background: transparent;
   border: none;
-  color: var(--text-muted);
+  color: var(--text-dim);
   padding: 4px;
   border-radius: var(--radius-sm);
   display: flex;
@@ -119,16 +128,16 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 60px 20px;
+  padding: 64px 20px;
   color: var(--text-muted);
   gap: 8px;
 }
 
 .emptyIcon {
-  width: 56px;
-  height: 56px;
+  width: 60px;
+  height: 60px;
   border-radius: var(--radius-xl);
-  background: var(--bg-card);
+  background: rgba(255,255,255,0.02);
   border: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -152,24 +161,24 @@
 /* ── Window groups ── */
 
 .windowGroup {
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .windowHeader {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 0 4px 8px;
+  letter-spacing: 0.08em;
+  padding: 0 4px 10px;
 }
 
 .windowCount {
-  font-weight: 400;
-  color: var(--text-muted);
+  font-weight: 500;
+  color: var(--text-dim);
   text-transform: none;
   letter-spacing: 0;
 }
@@ -186,24 +195,22 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 14px;
-  background: var(--bg-card);
-  backdrop-filter: blur(12px);
+  padding: 11px 16px;
+  background: rgba(255,255,255,0.015);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
-  transition: background 0.15s, border-color 0.15s;
-  animation: fadeSlideIn 0.2s ease both;
+  transition: all 0.15s var(--ease-out);
+  animation: fadeSlideIn 0.2s var(--ease-out) both;
 }
 
 .tabRow:hover {
-  background: var(--bg-card-hover);
+  background: rgba(255,255,255,0.035);
   border-color: var(--border-hover);
 }
 
 .tabRowActive {
-  border-color: rgba(56, 189, 248, 0.25);
-  background: rgba(56, 189, 248, 0.04);
+  border-color: rgba(59, 158, 255, 0.2);
+  background: rgba(59, 158, 255, 0.03);
 }
 
 .tabFavicon {
@@ -239,14 +246,14 @@
 
 .activeBadge {
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--accent);
   background: var(--accent-dim);
-  padding: 1px 6px;
+  padding: 2px 7px;
   border-radius: 99px;
   flex-shrink: 0;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
 }
 
 .tabUrl {
@@ -264,25 +271,25 @@
 .closeBtn {
   background: transparent;
   border: 1px solid transparent;
-  color: var(--text-muted);
+  color: var(--text-dim);
   padding: 6px;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: all 0.15s;
+  transition: all 0.15s var(--ease-out);
   cursor: pointer;
 }
 
 .closeBtn:hover {
   color: var(--red);
   background: var(--red-dim);
-  border-color: rgba(248, 113, 113, 0.2);
+  border-color: rgba(239, 68, 68, 0.15);
 }
 
 /* ── Responsive ── */
 
 @media (max-width: 768px) {
-  .page { padding: 16px; }
+  .page { padding: 20px 16px; }
 }
