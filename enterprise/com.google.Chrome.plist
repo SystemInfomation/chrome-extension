@@ -19,8 +19,13 @@
 
   EXTENSION DETAILS:
     - Extension ID:  lmaaddldfngeapalhdhgbeeipbjalioe
-    - Update URL:    https://blocked.Watsons.app/updates.xml
-    - CRX hosted at: https://blocked.Watsons.app/watson-control-tower.crx
+    - Update URL:    https://<YOUR_BACKEND_URL>/updates.xml
+    - CRX hosted at: https://<YOUR_BACKEND_URL>/extension.crx
+
+  Both endpoints are served directly by the Watson Control Tower backend
+  (backend/server.js).  Set the BACKEND_URL environment variable on your
+  backend deployment and place the built extension.crx at
+  backend/public/extension.crx before deploying.
 
   HOW TO DEPLOY:
     1. Copy this file to:
@@ -69,7 +74,7 @@
   -->
   <key>ExtensionInstallForcelist</key>
   <array>
-    <string>lmaaddldfngeapalhdhgbeeipbjalioe;https://blocked.Watsons.app/updates.xml</string>
+    <string>lmaaddldfngeapalhdhgbeeipbjalioe;https://<YOUR_BACKEND_URL>/updates.xml</string>
   </array>
 
 </dict>

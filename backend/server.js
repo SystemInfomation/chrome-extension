@@ -21,6 +21,8 @@
 "use strict";
 
 const http    = require("http");
+const path    = require("path");
+const fs      = require("fs");
 const express = require("express");
 const { WebSocketServer } = require("ws");
 const { Pool } = require("pg");
@@ -30,6 +32,29 @@ const { Pool } = require("pg");
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PORT = parseInt(process.env.PORT || "3001", 10);
+
+/**
+ * Public URL of this backend server — used to build absolute URLs in the
+ * extension update manifest served at GET /updates.xml.
+ *
+ * Set the BACKEND_URL environment variable to your deployed URL, e.g.:
+ *   https://watson-control-tower-monitor.onrender.com
+ *
+ * Falls back to http://localhost:<PORT> for local development.
+ */
+const BACKEND_URL = (process.env.BACKEND_URL || `http://localhost:${PORT}`).replace(/\/$/, "");
+
+/**
+ * Extension ID used in the update manifest.
+ * Override via EXTENSION_ID env var if you use a different key.
+ */
+const EXTENSION_ID = process.env.EXTENSION_ID || "lmaaddldfngeapalhdhgbeeipbjalioe";
+
+/**
+ * Directory from which the .crx file is served.
+ * Place your built extension.crx (or any .crx filename) inside backend/public/.
+ */
+const PUBLIC_DIR = path.join(__dirname, "public");
 
 /**
  * Number of recent activity entries held in memory for the initial WS history
@@ -542,6 +567,46 @@ app.delete("/api/filters/:domain", (req, res) => {
   broadcast({ type: "remove_filter", domain }, "extension");
 
   res.json({ ok: true, domain, filters: Array.from(customFilters) });
+});
+
+// ─── GET /updates.xml ────────────────────────────────────────────────────────
+// Chrome update manifest — Chrome polls this URL to check for new .crx builds.
+// The `codebase` attribute must be the full HTTPS URL to the .crx file.
+// Reference: https://developer.chrome.com/docs/extensions/how-to/distribute/host-on-linux
+app.get("/updates.xml", rateLimitMiddleware, (_req, res) => {
+  // Read the manifest.json from the extension directory to get the current version
+  let version = "1";
+  try {
+    const manifestPath = path.join(__dirname, "..", "extension", "manifest.json");
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    version = manifest.version || version;
+  } catch (_e) {
+    // manifest not available in production — version stays as "1"
+  }
+
+  const xml = `<?xml version='1.0' encoding='UTF-8'?>
+<gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
+  <app appid='${EXTENSION_ID}'>
+    <updatecheck codebase='${BACKEND_URL}/extension.crx' version='${version}' />
+  </app>
+</gupdate>`;
+
+  res.setHeader("Content-Type", "application/xml; charset=utf-8");
+  res.send(xml);
+});
+
+// ─── GET /extension.crx ──────────────────────────────────────────────────────
+// Serves the packed Chrome extension (.crx) file.
+// Place your built extension.crx file inside backend/public/extension.crx
+// before deploying.  Chrome will download and install it automatically when
+// it sees a newer version in /updates.xml.
+app.get("/extension.crx", rateLimitMiddleware, (req, res) => {
+  const crxPath = path.join(PUBLIC_DIR, "extension.crx");
+  if (!fs.existsSync(crxPath)) {
+    return res.status(404).json({ error: "extension.crx not found — place your built .crx file at backend/public/extension.crx" });
+  }
+  res.setHeader("Content-Type", "application/x-chrome-extension");
+  res.sendFile(crxPath);
 });
 
 // Health check
