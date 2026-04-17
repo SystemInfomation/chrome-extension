@@ -2342,6 +2342,12 @@ if (chrome.webRequest && chrome.webRequest.onHeadersReceived) {
 /**
  * Monitor declarativeNetRequest matched rules to log SSL inspection incidents.
  * When our SSL inspection rules (81001–81003) match, record an incident.
+ *
+ * NOTE: onRuleMatchedDebug is only available when the extension is loaded
+ * unpacked (developer mode). In production/enterprise installs this API does
+ * not exist, so the feature-detection guard below will simply skip registration.
+ * SSL blocks still occur via declarativeNetRequest — this listener only adds
+ * incident logging for debugging purposes.
  */
 if (chrome.declarativeNetRequest && chrome.declarativeNetRequest.onRuleMatchedDebug) {
   chrome.declarativeNetRequest.onRuleMatchedDebug.addListener((info) => {
