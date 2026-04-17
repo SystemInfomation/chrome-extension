@@ -48,7 +48,7 @@ const BACKEND_URL = (process.env.BACKEND_URL || `http://localhost:${PORT}`).repl
  * Extension ID used in the update manifest.
  * Override via EXTENSION_ID env var if you use a different key.
  */
-const EXTENSION_ID = process.env.EXTENSION_ID || "lmaaddldfngeapalhdhgbeeipbjalioe";
+const EXTENSION_ID = process.env.EXTENSION_ID || "bnjbkanlodhcfjmaekeoafhhjcjljkim";
 
 /**
  * Directory from which the .crx file is served.

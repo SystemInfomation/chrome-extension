@@ -320,7 +320,7 @@ To publish a new release, copy your built `.crx` to `backend/public/extension.cr
 **For enterprise deployment (optional):**
 If you want to force-install the extension on managed devices, you can use Chrome enterprise policies with the update URL:
 ```
-lmaaddldfngeapalhdhgbeeipbjalioe;https://backend.watsons.app/updates.xml
+bnjbkanlodhcfjmaekeoafhhjcjljkim;https://backend.watsons.app/updates.xml
 ```
 
 See the [Chrome Enterprise documentation](https://support.google.com/chrome/a/answer/9296680) for more details on enterprise deployment.
