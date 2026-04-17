@@ -16,9 +16,19 @@
 
   const host = location.hostname.toLowerCase();
 
+  /**
+   * Check if the current hostname matches a target domain (exact or subdomain match).
+   * Uses endsWith check with dot prefix to avoid substring false positives.
+   * @param {string} target  e.g. "bing.com"
+   * @returns {boolean}
+   */
+  function hostMatches(target) {
+    return host === target || host.endsWith("." + target);
+  }
+
   // ── Google SafeSearch ──────────────────────────────────────────────────────
 
-  if (host.includes("google.")) {
+  if (hostMatches("google.com") || hostMatches("google.co.uk") || hostMatches("google.ca") || hostMatches("google.com.au")) {
     const url = new URL(location.href);
     // Enforce safe=active on search result pages
     if (url.pathname === "/search" || url.searchParams.has("q")) {
@@ -51,7 +61,7 @@
 
   // ── Bing SafeSearch ────────────────────────────────────────────────────────
 
-  if (host.includes("bing.com")) {
+  if (hostMatches("bing.com")) {
     const url = new URL(location.href);
     if (url.pathname === "/search" || url.searchParams.has("q")) {
       if (url.searchParams.get("adlt") !== "strict") {
@@ -64,7 +74,7 @@
 
   // ── DuckDuckGo SafeSearch ──────────────────────────────────────────────────
 
-  if (host.includes("duckduckgo.com")) {
+  if (hostMatches("duckduckgo.com")) {
     const url = new URL(location.href);
     // kp=1 enables strict safe search on DuckDuckGo
     if (url.searchParams.has("q") && url.searchParams.get("kp") !== "1") {
@@ -76,7 +86,7 @@
 
   // ── YouTube Restricted Mode ────────────────────────────────────────────────
 
-  if (host.includes("youtube.com")) {
+  if (hostMatches("youtube.com")) {
     // Set the PREF cookie to enable Restricted Mode (f2=8000000)
     // This cookie tells YouTube to use Restricted Mode
     function enforceYouTubeRestricted() {

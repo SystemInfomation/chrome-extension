@@ -487,14 +487,17 @@ function recordIncident(incident) {
 // Feature 3: Activity Log Rotation
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Log rotation interval in minutes (6 hours). */
+const LOG_ROTATION_INTERVAL_MINUTES = 360;
+
 /**
  * Set up a periodic alarm to rotate (trim) activity logs.
  * Runs every 6 hours to ensure storage doesn't grow unbounded.
  */
 function setupLogRotationAlarm() {
   chrome.alarms.create("logRotation", {
-    delayInMinutes: 360,   // first run in 6 hours
-    periodInMinutes: 360,  // repeat every 6 hours
+    delayInMinutes: LOG_ROTATION_INTERVAL_MINUTES,
+    periodInMinutes: LOG_ROTATION_INTERVAL_MINUTES,
   });
 }
 

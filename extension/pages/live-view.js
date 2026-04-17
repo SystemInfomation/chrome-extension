@@ -104,7 +104,7 @@
 
     // Request screenshots from the background service worker
     requestScreenshot();
-    refreshTimer = setInterval(requestScreenshot, 1000);
+    refreshTimer = setInterval(requestScreenshot, 2000);
 
     // Also load open tabs
     loadOpenTabs();
