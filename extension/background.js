@@ -384,6 +384,8 @@ function persistOfflineQueue() {
  * automatically when the connection is re-established, ensuring no URL is
  * ever silently dropped.
  *
+ * Also persists the event to chrome.storage.local for the Activity Reports page.
+ *
  * @param {string}           url
  * @param {string}           title
  * @param {"visit"|"blocked"} action
@@ -408,6 +410,114 @@ function reportActivity(url, title, action, reason) {
     offlineQueue.push(payload);
     persistOfflineQueue();
   }
+
+  // ── Feature 3: Persist to local activity log for the Reports page ────────
+  appendActivityLog({ url, title: title || "", action, reason: reason || null, timestamp: payload.timestamp });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Feature 3: Activity Logs — local storage persistence
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Maximum number of activity log entries to keep in chrome.storage.local. */
+const MAX_ACTIVITY_LOG_ENTRIES = 5000;
+
+/**
+ * Append a single activity entry to chrome.storage.local["activityLogs"].
+ * Automatically trims older entries when the log exceeds MAX_ACTIVITY_LOG_ENTRIES.
+ *
+ * @param {object} entry  { url, title, action, reason, timestamp }
+ */
+function appendActivityLog(entry) {
+  chrome.storage.local.get(["activityLogs"], (result) => {
+    if (chrome.runtime.lastError) return;
+    const logs = result.activityLogs || [];
+    logs.push(entry);
+    // Trim oldest entries when over the cap
+    if (logs.length > MAX_ACTIVITY_LOG_ENTRIES) {
+      logs.splice(0, logs.length - MAX_ACTIVITY_LOG_ENTRIES);
+    }
+    chrome.storage.local.set({ activityLogs: logs });
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Feature 6: Incident Timeline — local storage persistence
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Maximum number of incident entries to keep in chrome.storage.local. */
+const MAX_INCIDENT_ENTRIES = 2000;
+
+/**
+ * Record an incident to chrome.storage.local["incidentTimeline"].
+ * Incidents are displayed on the Incident Timeline page.
+ *
+ * @param {object} incident  { type, severity, url, domain, reason, detail, screenshot, timestamp }
+ *   type:     "blocked" | "vpn_attempt" | "safesearch_bypass" | "ssl_flag"
+ *   severity: "critical" | "high" | "medium" | "low"
+ */
+function recordIncident(incident) {
+  const entry = {
+    type:       incident.type || "blocked",
+    severity:   incident.severity || "low",
+    url:        incident.url || "",
+    domain:     incident.domain || "",
+    reason:     incident.reason || "",
+    detail:     incident.detail || "",
+    screenshot: incident.screenshot || null,
+    timestamp:  incident.timestamp || Date.now(),
+  };
+
+  chrome.storage.local.get(["incidentTimeline"], (result) => {
+    if (chrome.runtime.lastError) return;
+    const incidents = result.incidentTimeline || [];
+    incidents.push(entry);
+    // Trim oldest entries when over the cap
+    if (incidents.length > MAX_INCIDENT_ENTRIES) {
+      incidents.splice(0, incidents.length - MAX_INCIDENT_ENTRIES);
+    }
+    chrome.storage.local.set({ incidentTimeline: incidents });
+  });
+
+  // Also report to the monitoring backend
+  wsSend({ type: "incident", ...entry });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Feature 3: Activity Log Rotation
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Set up a periodic alarm to rotate (trim) activity logs.
+ * Runs every 6 hours to ensure storage doesn't grow unbounded.
+ */
+function setupLogRotationAlarm() {
+  chrome.alarms.create("logRotation", {
+    delayInMinutes: 360,   // first run in 6 hours
+    periodInMinutes: 360,  // repeat every 6 hours
+  });
+}
+
+/**
+ * Trim activity logs and incident timeline to their respective maximums.
+ * Called periodically by the logRotation alarm.
+ */
+function rotateActivityLogs() {
+  chrome.storage.local.get(["activityLogs", "incidentTimeline"], (result) => {
+    if (chrome.runtime.lastError) return;
+    const updates = {};
+    const logs = result.activityLogs || [];
+    if (logs.length > MAX_ACTIVITY_LOG_ENTRIES) {
+      updates.activityLogs = logs.slice(logs.length - MAX_ACTIVITY_LOG_ENTRIES);
+    }
+    const incidents = result.incidentTimeline || [];
+    if (incidents.length > MAX_INCIDENT_ENTRIES) {
+      updates.incidentTimeline = incidents.slice(incidents.length - MAX_INCIDENT_ENTRIES);
+    }
+    if (Object.keys(updates).length > 0) {
+      chrome.storage.local.set(updates);
+    }
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1329,6 +1439,177 @@ function removeInternetBlockRules() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Feature 1: SafeSearch Enforcement — declarativeNetRequest redirect rules
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Rule IDs reserved for SafeSearch enforcement (80001–80010).
+ * These redirect search URLs to their safe-search equivalents using
+ * declarativeNetRequest, providing network-level enforcement that content
+ * scripts alone cannot guarantee.
+ */
+const SAFESEARCH_RULE_IDS = [80001, 80002, 80003, 80004];
+
+/**
+ * Apply declarativeNetRequest redirect rules for SafeSearch enforcement.
+ * - Google:    appends/forces safe=active
+ * - Bing:      appends/forces adlt=strict
+ * - DuckDuckGo: appends/forces kp=1
+ * - YouTube:   adds the YouTube-Restrict header for Restricted Mode
+ */
+function applySafeSearchRules() {
+  const rules = [
+    // Google SafeSearch: redirect /search?q=… without safe=active
+    {
+      id: 80001,
+      priority: 2,
+      action: {
+        type: "redirect",
+        redirect: {
+          transform: {
+            queryTransform: {
+              addOrReplaceParams: [{ key: "safe", value: "active" }],
+            },
+          },
+        },
+      },
+      condition: {
+        urlFilter: "||google.*/search*",
+        excludedInitiatorDomains: ["chrome-extension"],
+        resourceTypes: ["main_frame", "sub_frame"],
+      },
+    },
+    // Bing SafeSearch: force adlt=strict
+    {
+      id: 80002,
+      priority: 2,
+      action: {
+        type: "redirect",
+        redirect: {
+          transform: {
+            queryTransform: {
+              addOrReplaceParams: [{ key: "adlt", value: "strict" }],
+            },
+          },
+        },
+      },
+      condition: {
+        urlFilter: "||bing.com/search*",
+        excludedInitiatorDomains: ["chrome-extension"],
+        resourceTypes: ["main_frame", "sub_frame"],
+      },
+    },
+    // DuckDuckGo SafeSearch: force kp=1 (strict)
+    {
+      id: 80003,
+      priority: 2,
+      action: {
+        type: "redirect",
+        redirect: {
+          transform: {
+            queryTransform: {
+              addOrReplaceParams: [{ key: "kp", value: "1" }],
+            },
+          },
+        },
+      },
+      condition: {
+        urlFilter: "||duckduckgo.com/*",
+        excludedInitiatorDomains: ["chrome-extension"],
+        resourceTypes: ["main_frame", "sub_frame"],
+      },
+    },
+    // YouTube Restricted Mode: set the YouTube-Restrict header
+    // Note: This uses modifyHeaders to add YouTube's Restricted Mode header
+    {
+      id: 80004,
+      priority: 2,
+      action: {
+        type: "modifyHeaders",
+        requestHeaders: [
+          { header: "YouTube-Restrict", operation: "set", value: "Strict" },
+        ],
+      },
+      condition: {
+        urlFilter: "||youtube.com/*",
+        resourceTypes: ["main_frame", "sub_frame", "xmlhttprequest"],
+      },
+    },
+  ];
+
+  chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: SAFESEARCH_RULE_IDS,
+    addRules: rules,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Feature 5: HTTPS/SSL Deep Inspection — declarativeNetRequest domain rules
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Rule IDs reserved for HTTPS/SSL suspicious domain blocking (81001–81010).
+ *
+ * True HTTPS deep inspection (decrypting TLS to inspect content) is NOT
+ * possible from a Chrome extension. That requires either:
+ *   1. Enterprise policy with a root CA + local proxy (e.g. mitmproxy)
+ *   2. Native Messaging companion app that runs a local proxy
+ *
+ * What we CAN do at the extension level:
+ *   - Block or flag requests to suspicious HTTPS domains via declarativeNetRequest
+ *   - Inspect request/response headers for anomalies
+ *   - Monitor for self-signed cert warnings (limited to what Chrome exposes)
+ *
+ * The rules below block known categories of suspicious HTTPS domains and
+ * log the attempts as SSL inspection incidents.
+ */
+const SSL_INSPECTION_RULE_IDS = [81001, 81002, 81003];
+
+/**
+ * Apply HTTPS/SSL deep inspection rules.
+ * Blocks HTTPS requests to suspicious domain patterns and logs them.
+ */
+function applySSLInspectionRules() {
+  const rules = [
+    // Block HTTPS connections to known data-exfiltration patterns
+    {
+      id: 81001,
+      priority: 1,
+      action: { type: "block" },
+      condition: {
+        regexFilter: "^https://[^/]*(pastebin\\.com|hastebin\\.com|ghostbin\\.com|rentry\\.co|dpaste\\.org)",
+        resourceTypes: ["main_frame", "sub_frame", "xmlhttprequest"],
+      },
+    },
+    // Block encrypted DNS (DoH) bypass attempts
+    {
+      id: 81002,
+      priority: 1,
+      action: { type: "block" },
+      condition: {
+        regexFilter: "^https://[^/]*/dns-query",
+        resourceTypes: ["xmlhttprequest", "other"],
+      },
+    },
+    // Block HTTPS connections to common anonymization services
+    {
+      id: 81003,
+      priority: 1,
+      action: { type: "block" },
+      condition: {
+        regexFilter: "^https://[^/]*(temp-mail|guerrillamail|throwaway\\.email|yopmail|10minutemail)",
+        resourceTypes: ["main_frame", "sub_frame"],
+      },
+    },
+  ];
+
+  chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: SSL_INSPECTION_RULE_IDS,
+    addRules: rules,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Tab visibility — report all open tabs (including chrome:// pages)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1430,6 +1711,63 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
+
+  // ── Feature 1: SafeSearch bypass attempt from content script ─────────────
+  if (message.type === "SAFESEARCH_BYPASS_ATTEMPT") {
+    const engine = message.engine || "unknown";
+    const url = message.url || "";
+    recordIncident({
+      type: "safesearch_bypass",
+      severity: "high",
+      url,
+      domain: engine,
+      reason: `SafeSearch bypass attempt detected on ${engine}`,
+      detail: `User attempted to disable SafeSearch on ${engine}`,
+    });
+    // No response needed — fire-and-forget
+    return false;
+  }
+
+  // ── Feature 2: VPN/Proxy bypass attempt from content script ──────────────
+  if (message.type === "VPN_BYPASS_ATTEMPT") {
+    const method = message.method || "unknown";
+    const detail = message.detail || "";
+    const url = message.url || "";
+    let hostname = "";
+    try { hostname = new URL(url).hostname.toLowerCase(); } catch (_e) { /* ignore */ }
+    recordIncident({
+      type: "vpn_attempt",
+      severity: "critical",
+      url,
+      domain: hostname,
+      reason: `VPN/Proxy bypass attempt via ${method}`,
+      detail,
+    });
+    return false;
+  }
+
+  // ── Feature 4: Live View screenshot capture ──────────────────────────────
+  if (message.type === "CAPTURE_SCREENSHOT") {
+    (async () => {
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+        if (!tab || !tab.id) {
+          sendResponse({ error: "No active tab" });
+          return;
+        }
+        // Skip internal pages that cannot be captured
+        if (!tab.url || tab.url.startsWith("chrome://") || tab.url.startsWith("chrome-extension://")) {
+          sendResponse({ error: "Cannot capture internal page", url: tab.url, title: tab.title });
+          return;
+        }
+        const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: "jpeg", quality: 70 });
+        sendResponse({ dataUrl, url: tab.url, title: tab.title || "" });
+      } catch (_e) {
+        sendResponse({ error: "Capture failed" });
+      }
+    })();
+    return true; // keep channel open for async response
+  }
 });
 
 /**
@@ -1478,6 +1816,15 @@ chrome.webNavigation.onBeforeNavigate.addListener(
 
       // Report blocked navigation to monitoring backend
       reportActivity(url, "", "blocked", decision.reason);
+
+      // ── Feature 6: Record blocked site as an incident on the timeline ────
+      recordIncident({
+        type: "blocked",
+        severity: decision.reason.includes("VPN") || decision.reason.includes("Proxy") ? "high" : "medium",
+        url,
+        domain: hostname,
+        reason: decision.reason,
+      });
 
       // Purge cookies from the blocked domain to prevent tracking persistence
       clearCookiesForDomain(hostname);
@@ -1656,6 +2003,9 @@ chrome.alarms.onAlarm.addListener((alarm) => {
       clearTimeout(wsReconnectTimer);
       connectMonitorWs();
     }
+  } else if (alarm.name === "logRotation") {
+    // Feature 3: Periodically trim activity logs to prevent storage bloat
+    rotateActivityLogs();
   }
 });
 
@@ -1668,10 +2018,16 @@ chrome.runtime.onInstalled.addListener((details) => {
     performUpdateCheck();
     loadLocalBlocklist();
     connectMonitorWs();
+    applySafeSearchRules();    // Feature 1: SafeSearch enforcement
+    applySSLInspectionRules(); // Feature 5: HTTPS/SSL inspection rules
+    setupLogRotationAlarm();   // Feature 3: Activity log rotation
   } else if (details.reason === "update") {
     setupUpdateAlarm();
     loadLocalBlocklist();
     connectMonitorWs();
+    applySafeSearchRules();    // Feature 1: SafeSearch enforcement
+    applySSLInspectionRules(); // Feature 5: HTTPS/SSL inspection rules
+    setupLogRotationAlarm();   // Feature 3: Activity log rotation
   }
 });
 
@@ -1680,6 +2036,9 @@ chrome.runtime.onStartup.addListener(() => {
   setupUpdateAlarm();
   loadLocalBlocklist();
   connectMonitorWs();
+  applySafeSearchRules();    // Feature 1: SafeSearch enforcement
+  applySSLInspectionRules(); // Feature 5: HTTPS/SSL inspection rules
+  setupLogRotationAlarm();   // Feature 3: Activity log rotation
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1782,6 +2141,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // ─────────────────────────────────────────────────────────────────────────────
 loadLocalBlocklist();
 connectMonitorWs();
+applySafeSearchRules();    // Feature 1: Ensure SafeSearch rules are active
+applySSLInspectionRules(); // Feature 5: Ensure SSL inspection rules are active
 
 // Ensure the keep-alive alarm exists so the WS is reconnected even after
 // the service worker is suspended and woken by an unrelated event.
@@ -1921,6 +2282,89 @@ chrome.webNavigation.onCompleted.addListener((details) => {
     }
   );
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Feature 2: VPN/Proxy Bypass Prevention — header-based detection
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Headers that indicate a proxy or VPN is being used.
+ * When these headers are detected in a response, it suggests traffic is being
+ * proxied, which is a bypass attempt in a parental-control context.
+ */
+const PROXY_INDICATOR_HEADERS = new Set([
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-forwarded-proto",
+  "via",
+  "x-proxy-id",
+  "x-real-ip",
+  "forwarded",
+  "proxy-connection",
+]);
+
+if (chrome.webRequest && chrome.webRequest.onHeadersReceived) {
+  chrome.webRequest.onHeadersReceived.addListener(
+    (details) => {
+      if (!details.responseHeaders) return;
+      for (const header of details.responseHeaders) {
+        const name = (header.name || "").toLowerCase();
+        if (PROXY_INDICATOR_HEADERS.has(name)) {
+          let hostname = "";
+          try { hostname = new URL(details.url).hostname.toLowerCase(); } catch (_e) { /* ignore */ }
+          // Only flag non-CDN proxy headers (CDNs like Cloudflare also add these)
+          if (!isWhitelisted(hostname)) {
+            recordIncident({
+              type: "vpn_attempt",
+              severity: "medium",
+              url: details.url,
+              domain: hostname,
+              reason: "Proxy header detected: " + header.name,
+              detail: header.name + ": " + (header.value || "").substring(0, 200),
+            });
+          }
+          break; // Only record once per request
+        }
+      }
+    },
+    { urls: ["<all_urls>"] },
+    ["responseHeaders"]
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Feature 5: HTTPS/SSL inspection — log blocked SSL requests
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Monitor declarativeNetRequest matched rules to log SSL inspection incidents.
+ * When our SSL inspection rules (81001–81003) match, record an incident.
+ */
+if (chrome.declarativeNetRequest && chrome.declarativeNetRequest.onRuleMatchedDebug) {
+  chrome.declarativeNetRequest.onRuleMatchedDebug.addListener((info) => {
+    const ruleId = info.rule && info.rule.ruleId;
+    if (ruleId >= 81001 && ruleId <= 81003) {
+      const url = (info.request && info.request.url) || "";
+      let hostname = "";
+      try { hostname = new URL(url).hostname.toLowerCase(); } catch (_e) { /* ignore */ }
+
+      const reasonMap = {
+        81001: "Blocked HTTPS connection to data-exfiltration service",
+        81002: "Blocked encrypted DNS (DoH) bypass attempt",
+        81003: "Blocked HTTPS connection to temporary email service",
+      };
+
+      recordIncident({
+        type: "ssl_flag",
+        severity: "high",
+        url,
+        domain: hostname,
+        reason: reasonMap[ruleId] || "HTTPS/SSL flag",
+        detail: "Blocked by declarativeNetRequest rule " + ruleId,
+      });
+    }
+  });
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // webRequest — secondary blocking layer via onBeforeRequest
