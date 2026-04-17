@@ -73,21 +73,6 @@
     }
   ],
 
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "pages/reports.html",
-        "pages/timeline.html",
-        "pages/live-view.html",
-        "pages/shared.css",
-        "pages/reports.js",
-        "pages/timeline.js",
-        "pages/live-view.js"
-      ],
-      "matches": ["<all_urls>"]
-    }
-  ],
-
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
   }
