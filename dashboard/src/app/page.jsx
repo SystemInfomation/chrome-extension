@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect, useCallback } from "react";
 import {
-  Radio, Wifi, Globe, ShieldOff, Clock, Monitor, MonitorOff,
+  Radio, Wifi, Globe, ShieldOff, Clock, Monitor,
   Pause, Play, Trash2, Filter, Maximize2, Minimize2, ExternalLink,
   WifiOff,
 } from "lucide-react";
@@ -12,9 +12,9 @@ import styles from "./page.module.css";
 export default function LiveView() {
   const {
     liveEntries, wsStatus, extensionOnline,
-    liveScreenshot, screenStreamActive, startScreenStream, stopScreenStream,
+    liveScreenshot, screenStreamActive,
     clearLiveEntries,
-    internetBlocked, toggleInternetBlock,
+    internetBlocked,
   } = useMonitor();
 
   const feedRef = useRef(null);
@@ -80,47 +80,29 @@ export default function LiveView() {
         </div>
       </div>
 
-      {/* Block All Internet toggle */}
-      <div className={`${styles.blockPanel} ${internetBlocked ? styles.blockPanelActive : ""}`}>
-        <div className={styles.blockPanelLeft}>
-          <div className={`${styles.blockPanelIcon} ${internetBlocked ? styles.blockPanelIconActive : ""}`}>
-            {internetBlocked ? <WifiOff size={18} strokeWidth={2} /> : <Wifi size={18} strokeWidth={2} />}
-          </div>
-          <div>
-            <div className={styles.blockPanelTitle}>
-              {internetBlocked ? "Internet Blocked" : "Internet Active"}
+      {/* Internet status indicator (read-only) */}
+      {internetBlocked && (
+        <div className={`${styles.blockPanel} ${styles.blockPanelActive}`}>
+          <div className={styles.blockPanelLeft}>
+            <div className={`${styles.blockPanelIcon} ${styles.blockPanelIconActive}`}>
+              <WifiOff size={18} strokeWidth={2} />
             </div>
-            <div className={styles.blockPanelDesc}>
-              {internetBlocked
-                ? "All internet access is currently blocked on the monitored device"
-                : "Toggle to block all internet access on the monitored device"}
+            <div>
+              <div className={styles.blockPanelTitle}>Internet Blocked</div>
+              <div className={styles.blockPanelDesc}>
+                All internet access is currently blocked. Manage in Settings.
+              </div>
             </div>
           </div>
         </div>
-        <button
-          className={`${styles.blockToggle} ${internetBlocked ? styles.blockToggleActive : ""}`}
-          onClick={toggleInternetBlock}
-          disabled={wsStatus !== "connected" || !extensionOnline}
-          title={
-            wsStatus !== "connected" || !extensionOnline
-              ? "Extension must be online to toggle internet block"
-              : internetBlocked
-                ? "Unblock internet access"
-                : "Block all internet access"
-          }
-        >
-          <span className={styles.blockToggleKnob} />
-        </button>
-      </div>
+      )}
 
-      {/* Live Screen panel */}
+      {/* Live Screen panel (display-only) */}
       <LiveScreenPanel
         screenshot={liveScreenshot}
         active={screenStreamActive}
         extensionOnline={extensionOnline}
         wsStatus={wsStatus}
-        onStart={startScreenStream}
-        onStop={stopScreenStream}
       />
 
       {/* Feed toolbar */}
@@ -208,7 +190,7 @@ export default function LiveView() {
   );
 }
 
-function LiveScreenPanel({ screenshot, active, extensionOnline, wsStatus, onStart, onStop }) {
+function LiveScreenPanel({ screenshot, active, extensionOnline, wsStatus }) {
   const canStream = wsStatus === "connected" && extensionOnline;
   const [expanded, setExpanded] = useState(false);
   const [fps, setFps] = useState(0);
@@ -257,20 +239,6 @@ function LiveScreenPanel({ screenshot, active, extensionOnline, wsStatus, onStar
                 : <Maximize2 size={13} strokeWidth={2} />}
             </button>
           )}
-          {active ? (
-            <button className={`${styles.screenBtn} ${styles.screenBtnStop}`} onClick={onStop}>
-              <MonitorOff size={13} strokeWidth={2} /> Stop
-            </button>
-          ) : (
-            <button
-              className={`${styles.screenBtn} ${styles.screenBtnStart}`}
-              onClick={onStart}
-              disabled={!canStream}
-              title={!canStream ? "Extension must be online to view live screen" : "Start live screen view"}
-            >
-              <Monitor size={13} strokeWidth={2} /> Watch Screen
-            </button>
-          )}
         </div>
       </div>
 
@@ -294,7 +262,7 @@ function LiveScreenPanel({ screenshot, active, extensionOnline, wsStatus, onStar
             ) : (
               <>
                 <Monitor size={28} strokeWidth={1.5} className={styles.screenPlaceholderIcon} />
-                <span>{canStream ? 'Click "Watch Screen" to view the live screen' : "Extension offline — cannot show live screen"}</span>
+                <span>{canStream ? "Start streaming in Settings to view the live screen" : "Extension offline — cannot show live screen"}</span>
               </>
             )}
           </div>
