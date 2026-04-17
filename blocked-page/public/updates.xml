@@ -2,18 +2,25 @@
 <!--
   Chrome extension update manifest for Watson Control Tower.
 
-  Hosted at: https://blocked.Watsons.app/updates.xml
+  The Watson Control Tower backend serves this manifest dynamically at:
+    GET https://backend.watsons.app/updates.xml
 
-  This is the LIVE copy served by the blocked-page site. Keep it in sync
-  with extension/updates.xml whenever the version bumps.
+  The .crx file is served at:
+    GET https://backend.watsons.app/extension.crx
+
+  Set the BACKEND_URL and (optionally) EXTENSION_ID environment variables
+  on the backend deployment.  Place the built extension.crx file at
+  backend/public/extension.crx before deploying.
+
+  This static copy is kept here as a fallback / reference only.
+  Prefer the backend-served version in production.
 
   Extension ID: lmaaddldfngeapalhdhgbeeipbjalioe
-  Current version: 3.7.5
 
   Reference: https://developer.chrome.com/docs/extensions/how-to/distribute/host-on-linux
 -->
 <gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
   <app appid='lmaaddldfngeapalhdhgbeeipbjalioe'>
-    <updatecheck codebase='https://blocked.Watsons.app/watson-control-tower.crx' version='10' />
+    <updatecheck codebase='https://backend.watsons.app/extension.crx' version='1' />
   </app>
 </gupdate>

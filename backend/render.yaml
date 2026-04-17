@@ -8,6 +8,8 @@ services:
     envVars:
       - key: PORT
         value: 10000
+      - key: BACKEND_URL
+        value: https://backend.watsons.app
       - key: DATABASE_URL
         sync: false
     autoDeploy: true
