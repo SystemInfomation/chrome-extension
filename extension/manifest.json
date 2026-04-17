@@ -27,7 +27,6 @@
   },
 
   "permissions": [
-    "<all_urls>",
     "alarms",
     "cookies",
     "declarativeNetRequest",
