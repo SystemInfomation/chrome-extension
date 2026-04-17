@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Settings, Plus, Trash2, RefreshCw, CheckCircle, Focus, Wifi, WifiOff, Monitor, MonitorOff } from "lucide-react";
+import { Settings, Plus, Trash2, RefreshCw, Focus, Wifi, WifiOff, Monitor, MonitorOff } from "lucide-react";
 import { useMonitor } from "../../context/MonitorContext";
 import { supabase } from "../../lib/supabase";
 import styles from "./page.module.css";

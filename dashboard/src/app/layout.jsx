@@ -13,6 +13,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
@@ -24,17 +25,9 @@ export default function RootLayout({ children }) {
         <PinAuthProvider>
           <PinLock>
             <MonitorProvider>
-              <div style={{ display: "flex", height: "100dvh", overflow: "hidden" }}>
+              <div className="appShell">
                 <Sidebar />
-                <main
-                  style={{
-                    flex: 1,
-                    overflowY: "auto",
-                    background: "var(--bg-mesh)",
-                    backgroundAttachment: "fixed",
-                    position: "relative",
-                  }}
-                >
+                <main className="appMain">
                   {children}
                 </main>
               </div>

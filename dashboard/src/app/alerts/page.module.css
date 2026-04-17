@@ -154,6 +154,15 @@
 .pageInfo { font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 
 @media (max-width: 768px) {
-  .page { padding: 20px 16px; }
-  .alertCard { flex-wrap: wrap; }
+  .page { padding: 16px 12px; }
+  .alertCard { flex-wrap: wrap; padding: 12px 12px; gap: 8px; }
+  .alertUrl { font-size: 12px; }
+  .alertTime { width: 100%; text-align: right; }
+  .pagination { gap: 8px; }
+  .pageBtn { padding: 10px 14px; min-height: 44px; }
+}
+
+@media (max-width: 480px) {
+  .page { padding: 12px 8px; }
+  .severityBadge { font-size: 10px; padding: 3px 8px; }
 }

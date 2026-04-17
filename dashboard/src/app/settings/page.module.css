@@ -209,12 +209,29 @@
 .removeBtn:hover { color: var(--red); background: var(--red-dim); }
 
 @media (max-width: 768px) {
-  .page { padding: 20px 16px; }
+  .page { padding: 16px 12px; }
+  .header { margin-bottom: 20px; }
+  .title { font-size: 18px; }
+  .headerIcon { width: 36px; height: 36px; }
   .addRow { flex-direction: column; }
-  .btn { justify-content: center; }
-  .blockPanel, .focusPanel { flex-direction: column; align-items: flex-start; }
-  .blockToggle, .focusToggle { align-self: flex-end; }
+  .btn { justify-content: center; min-height: 44px; }
+  .input { font-size: 16px; /* prevents iOS zoom on focus */ min-height: 44px; }
+  .blockPanel, .focusPanel { flex-direction: column; align-items: flex-start; gap: 12px; padding: 14px 16px; }
+  .blockToggle, .focusToggle { align-self: flex-end; min-width: 48px; min-height: 26px; }
   .screenControlRow { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .screenControlRow .btn { width: 100%; justify-content: center; }
+  .removeBtn { min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
+  .filterItem { padding: 10px 10px; }
+  .sectionTitle { font-size: 10px; }
+  .sectionDesc { font-size: 12px; }
+}
+
+@media (max-width: 480px) {
+  .page { padding: 12px 8px; }
+  .card { padding: 14px 14px; }
+  .blockPanelIcon, .focusPanelIcon { width: 34px; height: 34px; }
+  .blockPanelTitle, .focusPanelTitle { font-size: 13px; }
+  .blockPanelDesc, .focusPanelDesc { font-size: 11px; }
 }
 
 /* ── Internet Block Panel ── */

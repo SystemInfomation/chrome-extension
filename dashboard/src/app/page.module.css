@@ -376,9 +376,32 @@
 }
 
 @media (max-width: 768px) {
-  .page { padding: 20px 16px; }
-  .header { margin-bottom: 20px; }
-  .feedToolbar { gap: 8px; }
+  .page { padding: 16px 12px; }
+  .header { margin-bottom: 16px; gap: 10px; flex-direction: column; align-items: flex-start; }
+  .headerRight { width: 100%; justify-content: space-between; }
+  .title { font-size: 18px; }
+  .headerIcon { width: 36px; height: 36px; }
+  .feedToolbar { gap: 6px; }
+  .feedToolbarLeft { gap: 4px; width: 100%; }
+  .filterGroup { flex: 1; justify-content: center; }
+  .row { padding: 10px 10px; gap: 8px; }
+  .rowTime { display: none; }
+  .rowUrl { font-size: 12px; }
+  .empty { padding: 48px 16px; }
+  .blockPanel { padding: 12px 14px; gap: 10px; }
+  .blockPanelTitle { font-size: 13px; }
+  .blockPanelDesc { font-size: 11px; }
+  .blockPanelIcon { width: 34px; height: 34px; }
+  .screenPanelHeader { padding: 10px 12px; }
+  .toolBtn { padding: 8px 10px; min-height: 44px; }
+  .filterBtn { padding: 6px 10px; min-height: 44px; }
+}
+
+@media (max-width: 480px) {
+  .page { padding: 12px 8px; }
+  .entryCount { display: none; }
+  .favicon { display: none; }
+  .badge { font-size: 10px; padding: 4px 10px; }
 }
 
 /* ── Live Screen panel ── */
