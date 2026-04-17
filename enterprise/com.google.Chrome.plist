@@ -19,8 +19,8 @@
 
   EXTENSION DETAILS:
     - Extension ID:  lmaaddldfngeapalhdhgbeeipbjalioe
-    - Update URL:    https://<YOUR_BACKEND_URL>/updates.xml
-    - CRX hosted at: https://<YOUR_BACKEND_URL>/extension.crx
+    - Update URL:    https://backend.watsons.app/updates.xml
+    - CRX hosted at: https://backend.watsons.app/extension.crx
 
   Both endpoints are served directly by the Watson Control Tower backend
   (backend/server.js).  Set the BACKEND_URL environment variable on your
@@ -74,7 +74,7 @@
   -->
   <key>ExtensionInstallForcelist</key>
   <array>
-    <string>lmaaddldfngeapalhdhgbeeipbjalioe;https://<YOUR_BACKEND_URL>/updates.xml</string>
+    <string>lmaaddldfngeapalhdhgbeeipbjalioe;https://backend.watsons.app/updates.xml</string>
   </array>
 
 </dict>

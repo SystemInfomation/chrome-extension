@@ -299,16 +299,12 @@ google-chrome --pack-extension=extension/ --pack-extension-key=watson-control-to
 
 ### 2 — Host the `.crx` and update manifest
 
-The `updates.xml` file is included in `blocked-page/public/updates.xml` and will be automatically hosted at `https://blocked.Watsons.app/updates.xml` when you deploy the blocked page.
+The `updates.xml` manifest and the `.crx` file are both served directly by the Watson Control Tower backend:
 
-The `.crx` file should also be hosted at `https://blocked.Watsons.app/watson-control-tower.crx`.
+- **Update manifest:** `https://backend.watsons.app/updates.xml`
+- **CRX download:** `https://backend.watsons.app/extension.crx`
 
-The `updates.xml` is already configured with:
-- Extension ID: `lmaaddldfngeapalhdhgbeeipbjalioe`
-- CRX URL: `https://blocked.Watsons.app/watson-control-tower.crx`
-- Version: `1.0.0`
-
-To update the version for a new release, edit both `extension/manifest.json` and `blocked-page/public/updates.xml` to match.
+To publish a new release, copy your built `.crx` to `backend/public/extension.crx` and bump `version` in `extension/manifest.json`. The backend reads the version from `manifest.json` at runtime, so `updates.xml` updates automatically on the next deploy.
 
 > Update the `version` attribute every time you release a new `.crx` so that Chrome
 > detects and applies the update automatically.
@@ -324,7 +320,7 @@ To update the version for a new release, edit both `extension/manifest.json` and
 **For enterprise deployment (optional):**
 If you want to force-install the extension on managed devices, you can use Chrome enterprise policies with the update URL:
 ```
-<EXTENSION_ID>;https://blocked.Watsons.app/updates.xml
+lmaaddldfngeapalhdhgbeeipbjalioe;https://backend.watsons.app/updates.xml
 ```
 
 See the [Chrome Enterprise documentation](https://support.google.com/chrome/a/answer/9296680) for more details on enterprise deployment.

@@ -2,11 +2,11 @@
 <!--
   Chrome extension update manifest for Watson Control Tower.
 
-  The Watson Control Tower backend now serves this manifest dynamically at:
-    GET https://<YOUR_BACKEND_URL>/updates.xml
+  The Watson Control Tower backend serves this manifest dynamically at:
+    GET https://backend.watsons.app/updates.xml
 
   The .crx file is served at:
-    GET https://<YOUR_BACKEND_URL>/extension.crx
+    GET https://backend.watsons.app/extension.crx
 
   Set the BACKEND_URL and (optionally) EXTENSION_ID environment variables
   on the backend deployment.  Place the built extension.crx file at
@@ -21,6 +21,6 @@
 -->
 <gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
   <app appid='lmaaddldfngeapalhdhgbeeipbjalioe'>
-    <updatecheck codebase='https://<YOUR_BACKEND_URL>/extension.crx' version='1' />
+    <updatecheck codebase='https://backend.watsons.app/extension.crx' version='1' />
   </app>
 </gupdate>
