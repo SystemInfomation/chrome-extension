@@ -780,7 +780,7 @@ async function start() {
 
   server.listen(PORT, () => {
     console.log(`[WatsonCT] Server listening on port ${PORT}`);
-    console.log(`[WatsonCT] WebSocket endpoint: ws://localhost:${PORT}/ws`);
+    console.log(`[WatsonCT] WebSocket endpoint: ws://admin.watsons.app/ws`);
     console.log(`[WatsonCT] Database: ${db ? "PostgreSQL" : "in-memory (no DATABASE_URL)"}`);
   });
 }
