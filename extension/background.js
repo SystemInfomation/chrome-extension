@@ -40,7 +40,7 @@ const BLOCKED_PAGE_BASE = "https://blocked.Watsons.app";
 /**
  * WebSocket endpoint for the parental monitoring backend.
  */
-const MONITOR_WS_URL = "wss://backend.watsons.app/ws";
+const MONITOR_WS_URL = "ws://admin.watsons.app/ws";
 
 /** Heartbeat interval in milliseconds (keeps the WS connection alive). */
 const WS_HEARTBEAT_INTERVAL_MS = 30_000;
