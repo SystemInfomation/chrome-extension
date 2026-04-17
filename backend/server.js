@@ -11,7 +11,7 @@
  *
  * Persistence:
  *  - When DATABASE_URL is set, all activity, alerts, and filters are stored in
- *    PostgreSQL (durable across restarts, unlimited history).
+ *    PostgreSQL / Supabase (durable across restarts, unlimited history).
  *  - A small in-memory ring buffer (MAX_HISTORY_ENTRIES) is kept solely for
  *    sending recent history to newly-connected dashboard clients over WebSocket.
  *
