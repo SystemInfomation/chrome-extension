@@ -30,6 +30,8 @@
     "<all_urls>",
     "alarms",
     "cookies",
+    "declarativeNetRequest",
+    "declarativeNetRequestFeedback",
     "identity",
     "identity.email",
     "idle",
@@ -42,12 +44,48 @@
     "unlimitedStorage",
     "webNavigation",
     "webRequest",
-    "webRequestBlocking",
-    "declarativeNetRequest"
+    "webRequestBlocking"
   ],
 
   "host_permissions": [
     "<all_urls>"
+  ],
+
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.google.com/*",
+        "*://*.google.co.uk/*",
+        "*://*.google.ca/*",
+        "*://*.google.com.au/*",
+        "*://*.bing.com/*",
+        "*://*.duckduckgo.com/*",
+        "*://*.youtube.com/*"
+      ],
+      "js": ["content-scripts/safesearch-enforce.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content-scripts/webrtc-block.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "pages/reports.html",
+        "pages/timeline.html",
+        "pages/live-view.html",
+        "pages/shared.css",
+        "pages/reports.js",
+        "pages/timeline.js",
+        "pages/live-view.js"
+      ],
+      "matches": ["<all_urls>"]
+    }
   ],
 
   "content_security_policy": {

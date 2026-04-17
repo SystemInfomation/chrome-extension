@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Incident Timeline — InternetWize</title>
+  <link rel="stylesheet" href="shared.css">
+  <style>
+    /* Timeline-specific styles */
+    .timeline {
+      position: relative;
+      padding-left: 32px;
+    }
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 12px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--color-border);
+    }
+    .timeline-item {
+      position: relative;
+      margin-bottom: 16px;
+      cursor: pointer;
+    }
+    .timeline-item .dot {
+      position: absolute;
+      left: -26px;
+      top: 16px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid var(--color-bg);
+    }
+    .dot-danger { background: var(--color-danger); }
+    .dot-warning { background: var(--color-warning); }
+    .dot-info { background: var(--color-info); }
+    .dot-success { background: var(--color-success); }
+
+    .timeline-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .timeline-item:hover .timeline-card {
+      border-color: var(--color-primary);
+      background: var(--color-surface-hover);
+    }
+    .timeline-card .time {
+      font-size: 0.75rem;
+      color: var(--color-text-secondary);
+    }
+    .timeline-card .title {
+      font-weight: 600;
+      margin: 4px 0;
+    }
+    .timeline-card .detail {
+      font-size: 0.85rem;
+      color: var(--color-text-secondary);
+      word-break: break-all;
+    }
+    .timeline-card .meta {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* Detail modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 999;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+    .modal-content {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius);
+      padding: 24px;
+      max-width: 560px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .modal-content h3 {
+      margin-bottom: 16px;
+    }
+    .modal-content .field {
+      margin-bottom: 12px;
+    }
+    .modal-content .field-label {
+      font-size: 0.75rem;
+      color: var(--color-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 2px;
+    }
+    .modal-content .field-value {
+      word-break: break-all;
+    }
+    .modal-close {
+      float: right;
+      background: none;
+      border: none;
+      color: var(--color-text-secondary);
+      font-size: 1.2rem;
+      cursor: pointer;
+    }
+    .modal-close:hover {
+      color: var(--color-text);
+    }
+    .screenshot-preview {
+      max-width: 100%;
+      border-radius: var(--radius);
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🛡️ Incident Timeline</h1>
+    <nav class="nav-tabs">
+      <a href="reports.html">Reports</a>
+      <a href="timeline.html" class="active">Incident Timeline</a>
+      <a href="live-view.html">Live View</a>
+    </nav>
+
+    <!-- Filters -->
+    <div class="toolbar">
+      <select id="filterType">
+        <option value="all">All Types</option>
+        <option value="blocked">Blocked Site</option>
+        <option value="vpn_attempt">VPN/Proxy Attempt</option>
+        <option value="safesearch_bypass">SafeSearch Bypass</option>
+        <option value="ssl_flag">HTTPS/SSL Flag</option>
+      </select>
+      <select id="filterSeverity">
+        <option value="all">All Severities</option>
+        <option value="critical">Critical</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+      <input type="date" id="filterDateFrom" title="From date">
+      <input type="date" id="filterDateTo" title="To date">
+      <button class="btn btn-outline btn-sm" id="btnRefresh">🔄 Refresh</button>
+    </div>
+
+    <!-- Timeline -->
+    <div class="timeline" id="timeline"></div>
+
+    <!-- Empty state -->
+    <div class="empty-state" id="emptyState" style="display:none;">
+      <div class="icon">🛡️</div>
+      <p>No incidents recorded yet. Blocked events and security alerts will appear here.</p>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination" id="pagination"></div>
+  </div>
+
+  <!-- Detail modal -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal-content" id="modalContent">
+      <button class="modal-close" id="modalClose">✕</button>
+      <h3 id="modalTitle">Incident Details</h3>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <script src="timeline.js"></script>
+</body>
+</html>
