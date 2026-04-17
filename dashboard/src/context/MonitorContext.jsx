@@ -35,7 +35,7 @@ import {
 } from "react";
 
 /** Default backend URL — pre-configured for this deployment. */
-const DEFAULT_BACKEND_URL = "https://chrome-extension-lwck.onrender.com";
+const DEFAULT_BACKEND_URL = "https://backend.watsons.app";
 const STORAGE_KEY = "watson_ct_backend_url";
 const MAX_LIVE_ENTRIES = 500;
 

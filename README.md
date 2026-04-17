@@ -236,24 +236,13 @@ dashboard/ — React + Next.js        (hosted on Vercel)
    | **Start Command** | `npm start`              |
    | **Environment**  | Node                      |
 
-4. After deploy you'll get a URL like `https://watsons-monitor.onrender.com`
+4. Set the custom domain to `backend.watsons.app` in the **Custom Domains** tab for the backend service.
 
 > Render.com free tier spins down after 15 minutes of inactivity. The extension sends a heartbeat every 30 seconds to keep the service alive.
 
-### Step 2 — Point the Extension at Your Backend
+### Step 2 — Extension Backend URL
 
-Open `extension/background.js` and change the constant near the top:
-
-```js
-// Change this to your Render.com URL:
-const MONITOR_WS_URL = "wss://watsons-monitor.onrender.com/ws";
-```
-
-Then rebuild and reinstall the extension:
-```bash
-npm run build
-npm run pack   # creates watson-control-tower.zip
-```
+The extension and dashboard are pre-configured to connect to `https://backend.watsons.app`. No changes needed after deploy.
 
 ### Step 3 — Deploy the Dashboard to Vercel
 
@@ -267,8 +256,6 @@ Or connect the repo to Vercel:
 2. Import this repository, set **Root Directory** to `dashboard`
 3. Framework preset: **Next.js** (auto-detected)
 4. Deploy
-
-After deployment, open the dashboard and go to **Settings** → enter your Render.com backend URL.
 
 ### Dashboard Pages
 
