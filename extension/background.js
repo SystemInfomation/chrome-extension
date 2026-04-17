@@ -34,15 +34,13 @@ import { detectSuspiciousLink } from "link-shield";
 const BLOCKED_PAGE_BASE = "https://blocked.Watsons.app";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Monitoring Configuration — change this to your Render.com URL after deploy
+// Monitoring Configuration
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * WebSocket endpoint for the parental monitoring backend.
- * Replace with your actual Render.com URL, e.g.:
- *   "wss://watsons-monitor.onrender.com/ws"
  */
-const MONITOR_WS_URL = "wss://chrome-extension-lwck.onrender.com/ws";
+const MONITOR_WS_URL = "wss://backend.watsons.app/ws";
 
 /** Heartbeat interval in milliseconds (keeps the WS connection alive). */
 const WS_HEARTBEAT_INTERVAL_MS = 30_000;
