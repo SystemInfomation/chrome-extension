@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { AlertTriangle, ShieldOff, ChevronLeft, ChevronRight } from "lucide-react";
 import { useMonitor } from "../../context/MonitorContext";
+import { supabase } from "../../lib/supabase";
 import styles from "./page.module.css";
 
 const SEVERITY_META = {
@@ -26,17 +27,34 @@ export default function Alerts() {
   useEffect(() => { clearAlerts(); }, [clearAlerts]);
 
   const fetchAlerts = useCallback(async () => {
-    if (!backendUrl || backendUrl.includes("YOUR_RENDER_URL")) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${backendUrl}/api/alerts?page=${page}&limit=${LIMIT}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setItems(data.items || []);
-      setTotal(data.total || 0);
+      // ── Supabase direct query ───────────────────────────────────────────
+      const { data, error: sbError, count } = await supabase
+        .from("alerts")
+        .select("*", { count: "exact" })
+        .order("timestamp", { ascending: false })
+        .range((page - 1) * LIMIT, page * LIMIT - 1);
+
+      if (sbError) throw new Error(sbError.message);
+
+      setItems(data || []);
+      setTotal(count || 0);
     } catch (err) {
-      setError(err.message);
+      // Fallback: try the backend REST API if Supabase fails
+      try {
+        if (!backendUrl || backendUrl.includes("YOUR_RENDER_URL")) {
+          throw new Error("Backend not configured");
+        }
+        const res = await fetch(`${backendUrl}/api/alerts?page=${page}&limit=${LIMIT}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        setItems(data.items || []);
+        setTotal(data.total || 0);
+      } catch (fallbackErr) {
+        setError(err.message + " (fallback: " + fallbackErr.message + ")");
+      }
     } finally {
       setLoading(false);
     }
@@ -45,7 +63,6 @@ export default function Alerts() {
   useEffect(() => { fetchAlerts(); }, [fetchAlerts]);
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
-  const isUnconfigured = !backendUrl || backendUrl.includes("YOUR_RENDER_URL");
 
   return (
     <div className={styles.page}>
@@ -60,14 +77,12 @@ export default function Alerts() {
             <p className={styles.subtitle}>Blocked site access attempts</p>
           </div>
         </div>
-        {!loading && !isUnconfigured && (
+        {!loading && (
           <div className={styles.countBadge}>{total.toLocaleString()} alerts</div>
         )}
       </div>
 
-      {isUnconfigured ? (
-        <div className={styles.notice}>Configure your backend URL in <a href="/settings">Settings</a>.</div>
-      ) : error ? (
+      {error ? (
         <div className={styles.error}>Failed to load: {error}</div>
       ) : loading ? (
         <div className={styles.alertList}>

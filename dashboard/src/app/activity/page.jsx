@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { List, Search, Filter, Globe, ShieldOff, ChevronLeft, ChevronRight } from "lucide-react";
 import { useMonitor } from "../../context/MonitorContext";
+import { supabase } from "../../lib/supabase";
 import styles from "./page.module.css";
 
 export default function ActivityLog() {
@@ -20,20 +21,46 @@ export default function ActivityLog() {
   const LIMIT = 50;
 
   const fetchActivity = useCallback(async () => {
-    if (!backendUrl || backendUrl.includes("YOUR_RENDER_URL")) return;
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ page, limit: LIMIT });
-      if (search) params.set("search", search);
-      if (action !== "all") params.set("action", action);
-      const res = await fetch(`${backendUrl}/api/activity?${params}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setItems(data.items || []);
-      setTotal(data.total || 0);
+      // ── Supabase direct query ───────────────────────────────────────────
+      let query = supabase
+        .from("activity")
+        .select("*", { count: "exact" })
+        .order("timestamp", { ascending: false })
+        .range((page - 1) * LIMIT, page * LIMIT - 1);
+
+      if (action !== "all") {
+        query = query.eq("action", action);
+      }
+      if (search) {
+        query = query.or(`url.ilike.%${search}%,title.ilike.%${search}%`);
+      }
+
+      const { data, error: sbError, count } = await query;
+
+      if (sbError) throw new Error(sbError.message);
+
+      setItems(data || []);
+      setTotal(count || 0);
     } catch (err) {
-      setError(err.message);
+      // Fallback: try the backend REST API if Supabase fails
+      try {
+        if (!backendUrl || backendUrl.includes("YOUR_RENDER_URL")) {
+          throw new Error("Backend not configured");
+        }
+        const params = new URLSearchParams({ page, limit: LIMIT });
+        if (search) params.set("search", search);
+        if (action !== "all") params.set("action", action);
+        const res = await fetch(`${backendUrl}/api/activity?${params}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        setItems(data.items || []);
+        setTotal(data.total || 0);
+      } catch (fallbackErr) {
+        setError(err.message + " (fallback: " + fallbackErr.message + ")");
+      }
     } finally {
       setLoading(false);
     }
@@ -45,7 +72,6 @@ export default function ActivityLog() {
   useEffect(() => { setPage(1); }, [search, action]);
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
-  const isUnconfigured = !backendUrl || backendUrl.includes("YOUR_RENDER_URL");
 
   return (
     <div className={styles.page}>
@@ -60,111 +86,105 @@ export default function ActivityLog() {
             <p className={styles.subtitle}>Full browsing history</p>
           </div>
         </div>
-        {!loading && !isUnconfigured && (
+        {!loading && (
           <div className={styles.countBadge}>{total.toLocaleString()} entries</div>
         )}
       </div>
 
-      {isUnconfigured ? (
-        <div className={styles.notice}>Configure your backend URL in <a href="/settings">Settings</a>.</div>
-      ) : (
-        <>
-          {/* Filters */}
-          <div className={styles.filters}>
-            <div className={styles.searchWrap}>
-              <Search size={14} className={styles.searchIcon} />
-              <input
-                className={styles.searchInput}
-                placeholder="Search URL or title…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            <div className={styles.filterGroup}>
-              <Filter size={14} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
-              {["all", "visit", "blocked"].map((v) => (
-                <button
-                  key={v}
-                  className={`${styles.filterBtn} ${action === v ? styles.filterActive : ""}`}
-                  onClick={() => setAction(v)}
-                >
-                  {v === "all" ? "All" : v === "visit" ? "Allowed" : "Blocked"}
-                </button>
+      {/* Filters */}
+      <div className={styles.filters}>
+        <div className={styles.searchWrap}>
+          <Search size={14} className={styles.searchIcon} />
+          <input
+            className={styles.searchInput}
+            placeholder="Search URL or title…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <div className={styles.filterGroup}>
+          <Filter size={14} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
+          {["all", "visit", "blocked"].map((v) => (
+            <button
+              key={v}
+              className={`${styles.filterBtn} ${action === v ? styles.filterActive : ""}`}
+              onClick={() => setAction(v)}
+            >
+              {v === "all" ? "All" : v === "visit" ? "Allowed" : "Blocked"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Error */}
+      {error && <div className={styles.error}>Failed to load: {error}</div>}
+
+      {/* Table */}
+      <div className={styles.tableWrap}>
+        {loading ? (
+          <div className={styles.loadingRows}>
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className={`${styles.skeletonRow} skeleton`} />
+            ))}
+          </div>
+        ) : items.length === 0 ? (
+          <div className={styles.empty}>No activity found.</div>
+        ) : (
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>URL / Title</th>
+                <th>Domain</th>
+                <th>Reason</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((entry) => (
+                <tr key={entry.id} className={entry.action === "blocked" ? styles.rowBlocked : ""}>
+                  <td>
+                    <span className={`${styles.pill} ${entry.action === "blocked" ? styles.pillRed : styles.pillGreen}`}>
+                      {entry.action === "blocked"
+                        ? <><ShieldOff size={11} /> Blocked</>
+                        : <><Globe     size={11} /> Allowed</>}
+                    </span>
+                  </td>
+                  <td className={styles.urlCell}>
+                    <div className={styles.urlMain}>{entry.title || entry.url}</div>
+                    {entry.title && <div className={styles.urlSub}>{entry.url}</div>}
+                  </td>
+                  <td className={styles.domainCell}>{entry.domain}</td>
+                  <td className={styles.reasonCell}>{entry.reason || "—"}</td>
+                  <td className={styles.timeCell}>{formatDateTime(entry.timestamp)}</td>
+                </tr>
               ))}
-            </div>
-          </div>
+            </tbody>
+          </table>
+        )}
+      </div>
 
-          {/* Error */}
-          {error && <div className={styles.error}>Failed to load: {error}</div>}
-
-          {/* Table */}
-          <div className={styles.tableWrap}>
-            {loading ? (
-              <div className={styles.loadingRows}>
-                {[...Array(8)].map((_, i) => (
-                  <div key={i} className={`${styles.skeletonRow} skeleton`} />
-                ))}
-              </div>
-            ) : items.length === 0 ? (
-              <div className={styles.empty}>No activity found.</div>
-            ) : (
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Status</th>
-                    <th>URL / Title</th>
-                    <th>Domain</th>
-                    <th>Reason</th>
-                    <th>Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((entry) => (
-                    <tr key={entry.id} className={entry.action === "blocked" ? styles.rowBlocked : ""}>
-                      <td>
-                        <span className={`${styles.pill} ${entry.action === "blocked" ? styles.pillRed : styles.pillGreen}`}>
-                          {entry.action === "blocked"
-                            ? <><ShieldOff size={11} /> Blocked</>
-                            : <><Globe     size={11} /> Allowed</>}
-                        </span>
-                      </td>
-                      <td className={styles.urlCell}>
-                        <div className={styles.urlMain}>{entry.title || entry.url}</div>
-                        {entry.title && <div className={styles.urlSub}>{entry.url}</div>}
-                      </td>
-                      <td className={styles.domainCell}>{entry.domain}</td>
-                      <td className={styles.reasonCell}>{entry.reason || "—"}</td>
-                      <td className={styles.timeCell}>{formatDateTime(entry.timestamp)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          {/* Pagination */}
-          {!loading && totalPages > 1 && (
-            <div className={styles.pagination}>
-              <button
-                className={styles.pageBtn}
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                <ChevronLeft size={14} /> Prev
-              </button>
-              <span className={styles.pageInfo}>
-                Page {page} of {totalPages}
-              </span>
-              <button
-                className={styles.pageBtn}
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next <ChevronRight size={14} />
-              </button>
-            </div>
-          )}
-        </>
+      {/* Pagination */}
+      {!loading && totalPages > 1 && (
+        <div className={styles.pagination}>
+          <button
+            className={styles.pageBtn}
+            disabled={page <= 1}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            <ChevronLeft size={14} /> Prev
+          </button>
+          <span className={styles.pageInfo}>
+            Page {page} of {totalPages}
+          </span>
+          <button
+            className={styles.pageBtn}
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next <ChevronRight size={14} />
+          </button>
+        </div>
       )}
     </div>
   );

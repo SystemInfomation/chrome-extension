@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Settings, Plus, Trash2, RefreshCw, CheckCircle, Focus } from "lucide-react";
 import { useMonitor } from "../../context/MonitorContext";
+import { supabase } from "../../lib/supabase";
 import styles from "./page.module.css";
 
 export default function SettingsPage() {
@@ -37,23 +38,36 @@ export default function SettingsPage() {
 
   const canControl = wsStatus === "connected" && extensionOnline;
 
-  const isUnconfigured = !backendUrl || backendUrl.includes("YOUR_RENDER_URL");
-
   const loadFilters = useCallback(async () => {
-    if (isUnconfigured) return;
     setFilterLoad(true);
     setFilterErr(null);
     try {
-      const res = await fetch(`${backendUrl}/api/filters`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setFilters(data.filters || []);
+      // ── Supabase direct query ───────────────────────────────────────────
+      const { data, error: sbError } = await supabase
+        .from("custom_filters")
+        .select("domain")
+        .order("domain", { ascending: true });
+
+      if (sbError) throw new Error(sbError.message);
+
+      setFilters((data || []).map((r) => r.domain));
     } catch (err) {
-      setFilterErr(err.message);
+      // Fallback: try backend REST API
+      try {
+        if (!backendUrl || backendUrl.includes("YOUR_RENDER_URL")) {
+          throw new Error("Backend not configured");
+        }
+        const res = await fetch(`${backendUrl}/api/filters`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        setFilters(data.filters || []);
+      } catch (fallbackErr) {
+        setFilterErr(err.message + " (fallback: " + fallbackErr.message + ")");
+      }
     } finally {
       setFilterLoad(false);
     }
-  }, [backendUrl, isUnconfigured]);
+  }, [backendUrl]);
 
   useEffect(() => { loadFilters(); }, [loadFilters]);
 
@@ -64,15 +78,24 @@ export default function SettingsPage() {
     setAdding(true);
     setFilterErr(null);
     try {
-      const res = await fetch(`${backendUrl}/api/filters`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setFilters(data.filters || []);
+      // ── Supabase upsert ─────────────────────────────────────────────────
+      const { error: sbError } = await supabase
+        .from("custom_filters")
+        .upsert({ domain }, { onConflict: "domain" });
+
+      if (sbError) throw new Error(sbError.message);
+
+      // Also notify the backend so it broadcasts to extension(s)
+      if (backendUrl && !backendUrl.includes("YOUR_RENDER_URL")) {
+        fetch(`${backendUrl}/api/filters`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ domain }),
+        }).catch(() => { /* best-effort */ });
+      }
+
       setNewDomain("");
+      await loadFilters();
     } catch (err) {
       setFilterErr(err.message);
     } finally {
@@ -83,10 +106,22 @@ export default function SettingsPage() {
   async function removeFilter(domain) {
     setFilterErr(null);
     try {
-      const res = await fetch(`${backendUrl}/api/filters/${encodeURIComponent(domain)}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setFilters(data.filters || []);
+      // ── Supabase delete ─────────────────────────────────────────────────
+      const { error: sbError } = await supabase
+        .from("custom_filters")
+        .delete()
+        .eq("domain", domain);
+
+      if (sbError) throw new Error(sbError.message);
+
+      // Also notify the backend so it broadcasts to extension(s)
+      if (backendUrl && !backendUrl.includes("YOUR_RENDER_URL")) {
+        fetch(`${backendUrl}/api/filters/${encodeURIComponent(domain)}`, {
+          method: "DELETE",
+        }).catch(() => { /* best-effort */ });
+      }
+
+      await loadFilters();
     } catch (err) {
       setFilterErr(err.message);
     }
@@ -164,10 +199,7 @@ export default function SettingsPage() {
           Domains added here are sent to the extension and blocked in real-time.
         </p>
 
-        {isUnconfigured ? (
-          <div className={styles.notice}>Configure the Backend URL above first.</div>
-        ) : (
-          <div className={styles.card}>
+        <div className={styles.card}>
             {/* Add form */}
             <form className={styles.addRow} onSubmit={addFilter}>
               <input
@@ -219,7 +251,6 @@ export default function SettingsPage() {
               <RefreshCw size={13} /> Refresh
             </button>
           </div>
-        )}
       </section>
 
       {/* Focus Mode */}
