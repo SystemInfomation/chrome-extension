@@ -20,10 +20,27 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build & package
+      - name: Build extension & package
         run: npm run pack
         env:
           BUILD_NUMBER: ${{ github.run_number }}
+
+      - name: Build CRX
+        run: node scripts/pack-crx.js
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+
+      - name: Commit extension.crx to repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add backend/public/extension.crx
+          if git diff --cached --quiet; then
+            echo "extension.crx unchanged — nothing to commit"
+          else
+            git commit -m "chore: update extension.crx [skip ci]"
+            git push
+          fi
 
       - name: Upload extension zip
         uses: actions/upload-artifact@v4

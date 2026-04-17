@@ -18,7 +18,7 @@
       auto-update silently.
 
   EXTENSION DETAILS:
-    - Extension ID:  lmaaddldfngeapalhdhgbeeipbjalioe
+    - Extension ID:  bnjbkanlodhcfjmaekeoafhhjcjljkim
     - Update URL:    https://backend.watsons.app/updates.xml
     - CRX hosted at: https://backend.watsons.app/extension.crx
 
@@ -74,7 +74,7 @@
   -->
   <key>ExtensionInstallForcelist</key>
   <array>
-    <string>lmaaddldfngeapalhdhgbeeipbjalioe;https://backend.watsons.app/updates.xml</string>
+    <string>bnjbkanlodhcfjmaekeoafhhjcjljkim;https://backend.watsons.app/updates.xml</string>
   </array>
 
 </dict>

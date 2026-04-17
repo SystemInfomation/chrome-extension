@@ -15,12 +15,12 @@
   This static copy is kept here as a fallback / reference only.
   Prefer the backend-served version in production.
 
-  Extension ID: lmaaddldfngeapalhdhgbeeipbjalioe
+  Extension ID: bnjbkanlodhcfjmaekeoafhhjcjljkim
 
   Reference: https://developer.chrome.com/docs/extensions/how-to/distribute/host-on-linux
 -->
 <gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
-  <app appid='lmaaddldfngeapalhdhgbeeipbjalioe'>
+  <app appid='bnjbkanlodhcfjmaekeoafhhjcjljkim'>
     <updatecheck codebase='https://backend.watsons.app/extension.crx' version='1' />
   </app>
 </gupdate>

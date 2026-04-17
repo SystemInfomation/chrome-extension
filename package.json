@@ -7,7 +7,8 @@
     "build": "webpack --config webpack.config.js",
     "build:dev": "webpack --config webpack.config.js --mode development",
     "lint": "eslint extension/background.js webpack.config.js",
-    "pack": "npm run build && cd extension && zip -r ../watson-control-tower.zip ."
+    "pack": "npm run build && cd extension && zip -r ../watson-control-tower.zip .",
+    "build:crx": "npm run build && node scripts/pack-crx.js"
   },
   "dependencies": {
     "link-shield": "^1.0.0",
@@ -15,6 +16,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "crx": "^5.0.1",
     "eslint": "^10.0.2",
     "globals": "^17.3.0",
     "webpack": "^5.98.0",
