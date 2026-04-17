@@ -282,6 +282,20 @@
 }
 
 @media (max-width: 768px) {
-  .page { padding: 20px 16px; }
-  .table { display: block; overflow-x: auto; }
+  .page { padding: 16px 12px; }
+  .header { flex-direction: column; align-items: flex-start; gap: 10px; margin-bottom: 20px; }
+  .title { font-size: 18px; }
+  .headerIcon { width: 36px; height: 36px; }
+  .table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .urlCell { max-width: 200px; }
+  .urlMain { max-width: 180px; font-size: 12px; }
+  .urlSub { max-width: 180px; }
+  .pagination { gap: 8px; }
+  .pageBtn { padding: 10px 14px; min-height: 44px; }
+}
+
+@media (max-width: 480px) {
+  .page { padding: 12px 8px; }
+  .domainCell { display: none; }
+  .reasonCell { max-width: 120px; }
 }

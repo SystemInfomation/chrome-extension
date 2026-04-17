@@ -1,29 +1,18 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Settings, Plus, Trash2, RefreshCw, CheckCircle, Focus } from "lucide-react";
+import { Settings, Plus, Trash2, RefreshCw, Focus, Wifi, WifiOff, Monitor, MonitorOff } from "lucide-react";
 import { useMonitor } from "../../context/MonitorContext";
 import { supabase } from "../../lib/supabase";
 import styles from "./page.module.css";
 
 export default function SettingsPage() {
   const {
-    backendUrl, setBackendUrl, wsStatus, extensionOnline,
+    wsStatus, extensionOnline, backendUrl,
     focusMode, setFocusMode, updateFocusDomains,
+    internetBlocked, toggleInternetBlock,
+    screenStreamActive, startScreenStream, stopScreenStream,
   } = useMonitor();
-
-  // Backend URL editor
-  const [urlDraft, setUrlDraft] = useState(backendUrl);
-  const [urlSaved, setUrlSaved] = useState(false);
-
-  useEffect(() => { setUrlDraft(backendUrl); }, [backendUrl]);
-
-  function saveUrl() {
-    const trimmed = urlDraft.trim().replace(/\/$/, "");
-    setBackendUrl(trimmed);
-    setUrlSaved(true);
-    setTimeout(() => setUrlSaved(false), 2000);
-  }
 
   // Custom filters
   const [filters,    setFilters]   = useState([]);
@@ -167,28 +156,71 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* Backend URL */}
+      {/* Block All Internet toggle */}
       <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>Backend URL</h2>
+        <h2 className={styles.sectionTitle}>Internet Access</h2>
+        <div className={`${styles.blockPanel} ${internetBlocked ? styles.blockPanelActive : ""}`}>
+          <div className={styles.blockPanelLeft}>
+            <div className={`${styles.blockPanelIcon} ${internetBlocked ? styles.blockPanelIconActive : ""}`}>
+              {internetBlocked ? <WifiOff size={18} strokeWidth={2} /> : <Wifi size={18} strokeWidth={2} />}
+            </div>
+            <div>
+              <div className={styles.blockPanelTitle}>
+                {internetBlocked ? "Internet Blocked" : "Internet Active"}
+              </div>
+              <div className={styles.blockPanelDesc}>
+                {internetBlocked
+                  ? "All internet access is currently blocked on the monitored device"
+                  : "Toggle to block all internet access on the monitored device"}
+              </div>
+            </div>
+          </div>
+          <button
+            className={`${styles.blockToggle} ${internetBlocked ? styles.blockToggleActive : ""}`}
+            onClick={toggleInternetBlock}
+            disabled={!canControl}
+            title={
+              !canControl
+                ? "Extension must be online to toggle internet block"
+                : internetBlocked
+                  ? "Unblock internet access"
+                  : "Block all internet access"
+            }
+          >
+            <span className={styles.blockToggleKnob} />
+          </button>
+        </div>
+      </section>
+
+      {/* Live Screen Stream controls */}
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Live Screen Stream</h2>
         <p className={styles.sectionDesc}>
-          Your Render.com server URL. Update this if you redeploy the backend.
+          Control whether the extension streams live screenshots of the monitored device.
         </p>
         <div className={styles.card}>
-          <div className={styles.urlRow}>
-            <input
-              className={styles.input}
-              value={urlDraft}
-              onChange={(e) => setUrlDraft(e.target.value)}
-              placeholder="https://your-app.onrender.com"
-              onKeyDown={(e) => { if (e.key === "Enter") saveUrl(); }}
-            />
-            <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={saveUrl}>
-              {urlSaved ? <><CheckCircle size={14} /> Saved!</> : "Save"}
-            </button>
+          <div className={styles.screenControlRow}>
+            <div className={styles.screenControlLeft}>
+              <Monitor size={16} strokeWidth={2} />
+              <span className={styles.screenControlLabel}>
+                {screenStreamActive ? "Streaming active" : "Streaming inactive"}
+              </span>
+            </div>
+            {screenStreamActive ? (
+              <button className={`${styles.btn} ${styles.btnDanger}`} onClick={stopScreenStream}>
+                <MonitorOff size={14} strokeWidth={2} /> Stop
+              </button>
+            ) : (
+              <button
+                className={`${styles.btn} ${styles.btnPrimary}`}
+                onClick={startScreenStream}
+                disabled={!canControl}
+                title={!canControl ? "Extension must be online to start streaming" : "Start live screen stream"}
+              >
+                <Monitor size={14} strokeWidth={2} /> Start
+              </button>
+            )}
           </div>
-          <p className={styles.hint}>
-            The extension connects to <code>{backendUrl || "—"}/ws</code>
-          </p>
         </div>
       </section>
 

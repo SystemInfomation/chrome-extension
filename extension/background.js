@@ -1801,7 +1801,38 @@ chrome.webNavigation.onBeforeNavigate.addListener(
     // Never re-process the blocked page itself
     if (hostname === new URL(BLOCKED_PAGE_BASE).hostname) return;
 
-    // Allow whitelisted domains unconditionally
+    // When Focus Mode is active, only domains in the allowed list may pass.
+    // The normal whitelist is intentionally skipped so that even google.com
+    // is blocked unless it appears in the Focus Mode allowlist.
+    if (focusModeEnabled) {
+      if (!isFocusAllowed(hostname)) {
+        const reason = "Focus Mode — domain not in allowed list";
+        if (!recentlyBlockedUrls.has(tabId)) {
+          recentlyBlockedUrls.set(tabId, new Set());
+        }
+        const blockedSet = recentlyBlockedUrls.get(tabId);
+        blockedSet.add(url);
+        if (blockedSet.size > MAX_BLOCKED_URLS_PER_TAB) {
+          blockedSet.delete(blockedSet.values().next().value);
+        }
+        reportActivity(url, "", "blocked", reason);
+        recordIncident({
+          type: "blocked",
+          severity: "medium",
+          url,
+          domain: hostname,
+          reason,
+        });
+        incrementBlockedCount();
+        chrome.tabs.update(tabId, { url: buildBlockedUrl(url, reason) });
+        return;
+      }
+      // Domain is focus-allowed — let it through without further checks
+      reportActivity(url, "", "visit", null);
+      return;
+    }
+
+    // Allow whitelisted domains unconditionally (only when focus mode is off)
     if (isWhitelisted(hostname)) return;
 
     // Run detection (result is cached after first evaluation)
@@ -2399,11 +2430,14 @@ if (chrome.webRequest && chrome.webRequest.onBeforeRequest) {
         return;
       }
 
-      // Skip whitelisted and own blocked-page domain
-      if (isWhitelisted(hostname)) return;
+      // Skip own blocked-page domain
       try {
         if (hostname === new URL(BLOCKED_PAGE_BASE).hostname.toLowerCase()) return;
       } catch (_e) { /* ignore */ }
+
+      // When Focus Mode is active the normal whitelist is bypassed —
+      // only focus-allowed domains may load sub-resources.
+      if (!focusModeEnabled && isWhitelisted(hostname)) return;
 
       const decision = evaluate(url);
       if (decision.blocked) {
