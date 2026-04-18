@@ -7,6 +7,15 @@ import {
 import { useMonitor } from "../context/MonitorContext";
 import styles from "./page.module.css";
 
+/* ── Helpers ──────────────────────────────────────────────────────────────── */
+
+function getPlaceholderMessage(streaming, backend, extension) {
+  if (!backend) return "Backend is disconnected";
+  if (!extension) return "Extension is offline";
+  if (!streaming) return "Click \"Start Stream\" to begin live monitoring";
+  return "Starting stream…";
+}
+
 /* ── Main Dashboard — Live View Only ─────────────────────────────────────── */
 
 export default function Dashboard() {
@@ -101,14 +110,7 @@ export default function Dashboard() {
                 {screenStreamActive ? "Waiting for first frame…" : "Screen stream inactive"}
               </span>
               <span className={styles.placeholderSub}>
-                {!screenStreamActive && backendConnected && extensionOnline
-                  ? "Click \"Start Stream\" to begin live monitoring"
-                  : !backendConnected
-                    ? "Backend is disconnected"
-                    : !extensionOnline
-                      ? "Extension is offline"
-                      : "Starting stream…"
-                }
+                {getPlaceholderMessage(screenStreamActive, backendConnected, extensionOnline)}
               </span>
               {!screenStreamActive && backendConnected && extensionOnline && (
                 <button className={styles.startBtn} onClick={startScreenStream}>
