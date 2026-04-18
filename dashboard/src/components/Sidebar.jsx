@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Shield, Radio, List, AlertTriangle, Settings, Lock, AppWindow } from "lucide-react";
+import { Shield, Radio, List, AlertTriangle, Settings, Lock, AppWindow, LayoutDashboard } from "lucide-react";
 import { useMonitor } from "../context/MonitorContext";
 import { usePinAuth } from "../context/PinAuthContext";
 import styles from "./Sidebar.module.css";
 
 const NAV = [
-  { href: "/",          label: "Live View",    Icon: Radio          },
+  { href: "/",          label: "Dashboard",    Icon: LayoutDashboard },
   { href: "/tabs",      label: "Tabs",         Icon: AppWindow      },
   { href: "/activity",  label: "Activity Log", Icon: List           },
   { href: "/alerts",    label: "Alerts",       Icon: AlertTriangle  },
