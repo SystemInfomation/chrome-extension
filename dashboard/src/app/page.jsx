@@ -1,397 +1,23 @@
 "use client";
 
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect, useCallback, useMemo } from "react";
+import Link from "next/link";
 import {
-  Radio, Wifi, Globe, ShieldOff, Clock, Monitor,
-  Pause, Play, Trash2, Filter, Maximize2, Minimize2, ExternalLink,
-  WifiOff,
+  Shield, Monitor, Wifi, WifiOff, Globe, ShieldOff, ShieldCheck,
+  Clock, Maximize2, Minimize2, Eye, EyeOff, Radio, Lock,
+  AlertTriangle, ArrowRight, AppWindow, List, Settings,
+  Activity, TrendingUp, ChevronDown, Server, Zap,
+  BarChart3, ExternalLink,
 } from "lucide-react";
 import { useMonitor } from "../context/MonitorContext";
+import { usePinAuth } from "../context/PinAuthContext";
 import styles from "./page.module.css";
 
-export default function LiveView() {
-  const {
-    liveEntries, wsStatus, extensionOnline,
-    liveScreenshot, screenStreamActive,
-    clearLiveEntries,
-    internetBlocked,
-  } = useMonitor();
-
-  const feedRef = useRef(null);
-  const [paused, setPaused] = useState(false);
-  const [filterMode, setFilterMode] = useState("all"); // "all" | "blocked" | "allowed"
-  const pausedEntriesRef = useRef([]);
-
-  // When paused, freeze the displayed entries
-  useEffect(() => {
-    if (!paused) {
-      pausedEntriesRef.current = [];
-    }
-  }, [paused]);
-
-  const displayEntries = paused && pausedEntriesRef.current.length > 0
-    ? pausedEntriesRef.current
-    : liveEntries;
-
-  // Capture snapshot when pausing
-  const togglePause = useCallback(() => {
-    setPaused((prev) => {
-      if (!prev) {
-        pausedEntriesRef.current = [...liveEntries];
-      }
-      return !prev;
-    });
-  }, [liveEntries]);
-
-  // Apply filter
-  const filtered = filterMode === "all"
-    ? displayEntries
-    : displayEntries.filter((e) =>
-        filterMode === "blocked" ? e.action === "blocked" : e.action !== "blocked"
-      );
-
-  const blockedCount = displayEntries.filter((e) => e.action === "blocked").length;
-
-  return (
-    <div className={styles.page}>
-      {/* Header */}
-      <div className={styles.header}>
-        <div className={styles.headerLeft}>
-          <div className={styles.headerIcon}>
-            <Radio size={18} strokeWidth={2} />
-          </div>
-          <div>
-            <h1 className={styles.title}>Live View</h1>
-            <p className={styles.subtitle}>Real-time browsing activity</p>
-          </div>
-        </div>
-        <div className={styles.headerRight}>
-          {displayEntries.length > 0 && (
-            <div className={styles.entryCount}>
-              <span className={styles.entryCountNum}>{displayEntries.length}</span> events
-              {blockedCount > 0 && (
-                <span className={styles.entryCountBlocked}>
-                  · <ShieldOff size={10} strokeWidth={2.5} /> {blockedCount} blocked
-                </span>
-              )}
-            </div>
-          )}
-          <ConnectionBadge wsStatus={wsStatus} extensionOnline={extensionOnline} />
-        </div>
-      </div>
-
-      {/* Internet status indicator (read-only) */}
-      {internetBlocked && (
-        <div className={`${styles.blockPanel} ${styles.blockPanelActive}`}>
-          <div className={styles.blockPanelLeft}>
-            <div className={`${styles.blockPanelIcon} ${styles.blockPanelIconActive}`}>
-              <WifiOff size={18} strokeWidth={2} />
-            </div>
-            <div>
-              <div className={styles.blockPanelTitle}>Internet Blocked</div>
-              <div className={styles.blockPanelDesc}>
-                All internet access is currently blocked. Manage in Settings.
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Live Screen panel (display-only) */}
-      <LiveScreenPanel
-        screenshot={liveScreenshot}
-        active={screenStreamActive}
-        extensionOnline={extensionOnline}
-        wsStatus={wsStatus}
-      />
-
-      {/* Feed toolbar */}
-      {displayEntries.length > 0 && (
-        <div className={styles.feedToolbar}>
-          <div className={styles.feedToolbarLeft}>
-            <button
-              className={`${styles.toolBtn} ${paused ? styles.toolBtnActive : ""}`}
-              onClick={togglePause}
-              title={paused ? "Resume live feed" : "Pause live feed"}
-            >
-              {paused ? <Play size={13} strokeWidth={2} /> : <Pause size={13} strokeWidth={2} />}
-              {paused ? "Resume" : "Pause"}
-            </button>
-
-            <div className={styles.filterGroup}>
-              <Filter size={12} strokeWidth={2} style={{ color: "var(--text-muted)" }} />
-              {["all", "blocked", "allowed"].map((mode) => (
-                <button
-                  key={mode}
-                  className={`${styles.filterBtn} ${filterMode === mode ? styles.filterActive : ""}`}
-                  onClick={() => setFilterMode(mode)}
-                >
-                  {mode === "all" ? "All" : mode === "blocked" ? "Blocked" : "Allowed"}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <button
-            className={styles.toolBtn}
-            onClick={clearLiveEntries}
-            title="Clear live feed"
-          >
-            <Trash2 size={12} strokeWidth={2} /> Clear
-          </button>
-        </div>
-      )}
-
-      {/* Empty state */}
-      {filtered.length === 0 && displayEntries.length === 0 && (
-        <div className={styles.empty}>
-          <div className={styles.emptyIcon}>
-            <Radio size={32} strokeWidth={1.5} />
-          </div>
-          <div className={styles.emptyTitle}>Waiting for activity…</div>
-          <div className={styles.emptyText}>
-            {wsStatus === "connected"
-              ? "Connected. Browsing events will appear here in real-time."
-              : wsStatus === "connecting"
-                ? "Connecting to backend…"
-                : "Not connected to backend. Check Settings."}
-          </div>
-        </div>
-      )}
-
-      {/* Filtered empty state */}
-      {filtered.length === 0 && displayEntries.length > 0 && (
-        <div className={styles.empty}>
-          <div className={styles.emptyIcon}>
-            <Filter size={28} strokeWidth={1.5} />
-          </div>
-          <div className={styles.emptyTitle}>No matching events</div>
-          <div className={styles.emptyText}>
-            No {filterMode} events in the current feed. Try a different filter.
-          </div>
-        </div>
-      )}
-
-      {/* Live feed */}
-      {filtered.length > 0 && (
-        <div className={styles.feed} ref={feedRef}>
-          {paused && (
-            <div className={styles.pausedBanner}>
-              <Pause size={12} strokeWidth={2.5} />
-              Feed paused — new events are buffered
-            </div>
-          )}
-          {filtered.map((entry, i) => (
-            <ActivityRow key={entry.id || i} entry={entry} isNew={!paused && i === 0} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function LiveScreenPanel({ screenshot, active, extensionOnline, wsStatus }) {
-  const canStream = wsStatus === "connected" && extensionOnline;
-  const [expanded, setExpanded] = useState(false);
-  const [fps, setFps] = useState(0);
-  const frameCountRef = useRef(0);
-  const prevScreenshotRef = useRef(null);
-
-  // FPS counter — count how many new frames arrive per second
-  useEffect(() => {
-    const id = setInterval(() => {
-      setFps(frameCountRef.current);
-      frameCountRef.current = 0;
-    }, 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  // Track new frames for FPS counter
-  useEffect(() => {
-    if (screenshot && screenshot !== prevScreenshotRef.current) {
-      frameCountRef.current++;
-      prevScreenshotRef.current = screenshot;
-    }
-  }, [screenshot]);
-
-  return (
-    <div className={`${styles.screenPanel} ${expanded ? styles.screenPanelExpanded : ""}`}>
-      <div className={styles.screenPanelHeader}>
-        <div className={styles.screenPanelTitle}>
-          <Monitor size={15} strokeWidth={2} />
-          Live Screen
-          {active && screenshot && (
-            <span className={styles.screenLiveBadge}>
-              <span className={styles.screenLiveDot} />LIVE
-              {fps > 0 && <span className={styles.screenFps}>{fps} fps</span>}
-            </span>
-          )}
-        </div>
-        <div className={styles.screenPanelControls}>
-          {screenshot && (
-            <button
-              className={styles.screenBtn}
-              onClick={() => setExpanded((prev) => !prev)}
-              title={expanded ? "Collapse" : "Expand"}
-            >
-              {expanded
-                ? <Minimize2 size={13} strokeWidth={2} />
-                : <Maximize2 size={13} strokeWidth={2} />}
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className={styles.screenDisplay}>
-        {screenshot ? (
-          <>
-            <img
-              src={screenshot}
-              alt="Live screen capture"
-              className={styles.screenImg}
-            />
-            <ScreenOverlay fps={fps} />
-          </>
-        ) : (
-          <div className={styles.screenPlaceholder}>
-            {active ? (
-              <>
-                <Monitor size={28} strokeWidth={1.5} className={styles.screenPlaceholderIcon} />
-                <span>Waiting for first frame…</span>
-              </>
-            ) : (
-              <>
-                <Monitor size={28} strokeWidth={1.5} className={styles.screenPlaceholderIcon} />
-                <span>{canStream ? "Start streaming in Settings to view the live screen" : "Extension offline — cannot show live screen"}</span>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ScreenOverlay({ fps }) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  return (
-    <div className={styles.screenOverlay}>
-      <span className={styles.screenOverlayDot} />
-      <span>Streaming · {new Date(now).toLocaleTimeString()}</span>
-      {fps > 0 && <span className={styles.screenOverlayFps}>{fps} fps</span>}
-    </div>
-  );
-}
-
-function ActivityRow({ entry, isNew }) {
-  const blocked    = entry.action === "blocked";
-  const domain     = entry.domain || extractDomain(entry.url);
-  const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-
-  return (
-    <div className={`${styles.row} ${blocked ? styles.rowBlocked : styles.rowAllowed} ${isNew ? styles.rowNew : ""}`}>
-      {/* Favicon */}
-      <div className={styles.favicon}>
-        <img
-          src={faviconUrl}
-          alt=""
-          width={16}
-          height={16}
-          onError={(e) => { e.currentTarget.style.display = "none"; }}
-        />
-      </div>
-
-      {/* Status icon */}
-      <div className={`${styles.actionIcon} ${blocked ? styles.actionBlocked : styles.actionAllowed}`}>
-        {blocked
-          ? <ShieldOff size={13} strokeWidth={2.5} />
-          : <Globe     size={13} strokeWidth={2} />}
-      </div>
-
-      {/* Content */}
-      <div className={styles.rowContent}>
-        <div className={styles.rowUrl} title={entry.url}>
-          {entry.title || entry.url}
-        </div>
-        {entry.title && (
-          <div className={styles.rowDomain}>
-            <ExternalLink size={9} strokeWidth={2} />
-            {domain}
-          </div>
-        )}
-        {blocked && entry.reason && (
-          <div className={styles.rowReason}>{entry.reason}</div>
-        )}
-      </div>
-
-      {/* Time */}
-      <div className={styles.rowTime}>
-        <Clock size={11} strokeWidth={2} />
-        <RelativeTime timestamp={entry.timestamp} />
-      </div>
-    </div>
-  );
-}
-
-function RelativeTime({ timestamp }) {
-  const [, setTick] = useState(0);
-
-  useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 5000);
-    return () => clearInterval(id);
-  }, []);
-
-  return <span title={formatAbsoluteTime(timestamp)}>{formatRelativeTime(timestamp)}</span>;
-}
-
-function ConnectionBadge({ wsStatus, extensionOnline }) {
-  if (wsStatus === "connected" && extensionOnline) {
-    return (
-      <div className={`${styles.badge} ${styles.badgeGreen}`}>
-        <span className={styles.badgeDot} style={{ background: "var(--green)" }} />
-        Extension Online
-      </div>
-    );
-  }
-  if (wsStatus === "connected") {
-    return (
-      <div className={`${styles.badge} ${styles.badgeYellow}`}>
-        <span className={styles.badgeDot} style={{ background: "var(--yellow)" }} />
-        Extension Offline
-      </div>
-    );
-  }
-  if (wsStatus === "connecting") {
-    return (
-      <div className={`${styles.badge} ${styles.badgeYellow}`}>
-        <span className={styles.badgeDot} style={{ background: "var(--yellow)" }} />
-        Connecting…
-      </div>
-    );
-  }
-  return (
-    <div className={`${styles.badge} ${styles.badgeRed}`}>
-      <Wifi size={12} strokeWidth={2} />
-      Disconnected
-    </div>
-  );
-}
+/* ── Helpers ─────────────────────────────────────────────────────────────── */
 
 function extractDomain(url) {
   try { return new URL(url).hostname.replace(/^www\./, ""); }
-  catch { return url; }
-}
-
-function formatAbsoluteTime(ts) {
-  if (!ts) return "";
-  const d = new Date(typeof ts === "string" ? Number(ts) : ts);
-  if (isNaN(d.getTime())) return "";
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  catch { return "unknown"; }
 }
 
 function formatRelativeTime(ts) {
@@ -404,5 +30,601 @@ function formatRelativeTime(ts) {
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
-  return formatAbsoluteTime(ts);
+  return new Date(numTs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function faviconUrl(domain) {
+  const url = new URL("https://www.google.com/s2/favicons");
+  url.searchParams.set("domain", domain);
+  url.searchParams.set("sz", "32");
+  return url.toString();
+}
+
+/* ── Main Dashboard ──────────────────────────────────────────────────────── */
+
+export default function Dashboard() {
+  const {
+    wsStatus, extensionOnline, liveEntries, newAlertCount,
+    liveScreenshot, screenStreamActive, startScreenStream, stopScreenStream,
+    openTabs, internetBlocked, toggleInternetBlock,
+    focusMode,
+  } = useMonitor();
+
+  const { lock } = usePinAuth();
+
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+  const [secDropdownOpen, setSecDropdownOpen] = useState(false);
+  const [screenExpanded, setScreenExpanded] = useState(false);
+  const secRef = useRef(null);
+
+  // Clock tick
+  useEffect(() => {
+    const id = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClick(e) {
+      if (secRef.current && !secRef.current.contains(e.target)) {
+        setSecDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  // Computed stats
+  const stats = useMemo(() => {
+    const sitesSet = new Set();
+    let blocked = 0;
+    const domainCount = {};
+
+    for (const entry of liveEntries) {
+      const d = entry.domain || extractDomain(entry.url || "");
+      if (d) {
+        sitesSet.add(d);
+        domainCount[d] = (domainCount[d] || 0) + 1;
+      }
+      if (entry.action === "blocked") blocked++;
+    }
+
+    let topDomain = "—";
+    let topCount = 0;
+    for (const [domain, count] of Object.entries(domainCount)) {
+      if (count > topCount) { topDomain = domain; topCount = count; }
+    }
+
+    return {
+      sitesVisited: sitesSet.size,
+      blockedAttempts: blocked,
+      activeTabs: openTabs.length,
+      topDomain,
+    };
+  }, [liveEntries, openTabs]);
+
+  // FPS counter for live screen
+  const [fps, setFps] = useState(0);
+  const frameCountRef = useRef(0);
+  const prevScreenRef = useRef(null);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setFps(frameCountRef.current);
+      frameCountRef.current = 0;
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (liveScreenshot && liveScreenshot !== prevScreenRef.current) {
+      frameCountRef.current++;
+      prevScreenRef.current = liveScreenshot;
+    }
+  }, [liveScreenshot]);
+
+  // Recent entries for feed
+  const recentEntries = liveEntries.slice(0, 6);
+  const latestAlerts = liveEntries.filter((e) => e.action === "blocked").slice(0, 3);
+
+  // Unique windows from openTabs
+  const windowCount = useMemo(() => {
+    const wins = new Set(openTabs.map((t) => t.windowId));
+    return wins.size || 1;
+  }, [openTabs]);
+
+  // Activity timeline (last 2 hours)
+  const timeline = useMemo(() => {
+    const now = Date.now();
+    const twoHours = 2 * 60 * 60 * 1000;
+    const start = now - twoHours;
+    const segments = [];
+    const bucketSize = twoHours / 24;
+
+    for (let i = 0; i < 24; i++) {
+      const bStart = start + i * bucketSize;
+      const bEnd = bStart + bucketSize;
+      let allowed = 0;
+      let blocked = 0;
+      for (const e of liveEntries) {
+        const ts = typeof e.timestamp === "string" ? Number(e.timestamp) : e.timestamp;
+        if (ts >= bStart && ts < bEnd) {
+          if (e.action === "blocked") blocked++;
+          else allowed++;
+        }
+      }
+      segments.push({ allowed, blocked, total: allowed + blocked });
+    }
+    return segments;
+  }, [liveEntries]);
+
+  const backendConnected = wsStatus === "connected";
+
+  return (
+    <div className={styles.dashboard}>
+      {/* ── Top Header Bar ── */}
+      <header className={styles.topBar}>
+        <div className={styles.topBarLeft}>
+          <div className={styles.logoIcon}>
+            <Shield size={18} strokeWidth={2.5} />
+          </div>
+          <span className={styles.logoText}>Control Tower</span>
+        </div>
+
+        <div className={styles.topBarCenter}>
+          <Monitor size={14} strokeWidth={2} />
+          <span>William&apos;s MacBook</span>
+        </div>
+
+        <div className={styles.topBarRight}>
+          <div className={`${styles.connPill} ${backendConnected ? styles.connPillGreen : styles.connPillRed}`}>
+            <span className={styles.connDot} />
+            Backend
+          </div>
+          <div className={`${styles.connPill} ${extensionOnline ? styles.connPillGreen : styles.connPillRed}`}>
+            <span className={styles.connDot} />
+            Extension
+          </div>
+
+          <div className={styles.clockDisplay}>
+            <Clock size={12} strokeWidth={2} />
+            {currentTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+          </div>
+
+          <div className={styles.secWrapper} ref={secRef}>
+            <button
+              className={styles.secBtn}
+              onClick={() => setSecDropdownOpen((p) => !p)}
+            >
+              <Shield size={14} strokeWidth={2} />
+              <ChevronDown size={12} strokeWidth={2} />
+            </button>
+
+            {secDropdownOpen && (
+              <div className={styles.secDropdown}>
+                <div className={styles.secItem}>
+                  <Zap size={13} strokeWidth={2} />
+                  <span>Session active</span>
+                </div>
+                <button
+                  className={styles.secItemBtn}
+                  onClick={() => { lock(); setSecDropdownOpen(false); }}
+                >
+                  <Lock size={13} strokeWidth={2} />
+                  <span>Lock Dashboard</span>
+                </button>
+                <button className={`${styles.secItemBtn} ${styles.secItemDisabled}`} disabled>
+                  <List size={13} strokeWidth={2} />
+                  <span>Audit Log</span>
+                </button>
+                <button className={`${styles.secItemBtn} ${styles.secItemDisabled}`} disabled>
+                  <AlertTriangle size={13} strokeWidth={2} />
+                  <span>Logout All Devices</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className={styles.e2eBadge}>
+            <Lock size={10} strokeWidth={2.5} />
+            Secured with E2E encryption
+          </div>
+        </div>
+      </header>
+
+      {/* ── Hero Quick Status Row ── */}
+      <div className={styles.statusRow}>
+        {/* Card 1: Live Screen Status */}
+        <div className={styles.statusCard}>
+          <div className={styles.statusCardIcon}>
+            <Monitor size={20} strokeWidth={2} />
+          </div>
+          <div className={styles.statusCardBody}>
+            <div className={styles.statusCardLabel}>Live Screen</div>
+            {liveScreenshot ? (
+              <div className={styles.statusThumbWrap}>
+                <img src={liveScreenshot} alt="Screen" className={styles.statusThumb} />
+              </div>
+            ) : screenStreamActive ? (
+              <div className={styles.statusCardValue}>
+                <span className={styles.liveDot} />
+                Streaming Active
+              </div>
+            ) : (
+              <div className={styles.statusCardValueDim}>Inactive</div>
+            )}
+          </div>
+          {screenStreamActive && (
+            <button className={styles.statusCardBtn} onClick={stopScreenStream} title="Stop streaming">
+              <EyeOff size={14} strokeWidth={2} />
+            </button>
+          )}
+          {!screenStreamActive && backendConnected && extensionOnline && (
+            <button className={styles.statusCardBtn} onClick={startScreenStream} title="Start streaming">
+              <Eye size={14} strokeWidth={2} />
+            </button>
+          )}
+        </div>
+
+        {/* Card 2: Internet Status */}
+        <div className={styles.statusCard}>
+          <div className={`${styles.statusCardIcon} ${internetBlocked ? styles.iconRed : styles.iconGreen}`}>
+            {internetBlocked ? <WifiOff size={20} strokeWidth={2} /> : <Wifi size={20} strokeWidth={2} />}
+          </div>
+          <div className={styles.statusCardBody}>
+            <div className={styles.statusCardLabel}>Internet</div>
+            <div className={`${styles.statusCardValue} ${internetBlocked ? styles.textRed : styles.textGreen}`}>
+              {internetBlocked ? "Blocked" : "Active"}
+            </div>
+          </div>
+          <button
+            className={`${styles.toggleBtn} ${internetBlocked ? styles.toggleActive : ""}`}
+            onClick={toggleInternetBlock}
+            disabled={!backendConnected}
+            title={internetBlocked ? "Unblock internet" : "Block internet"}
+          >
+            <span className={styles.toggleKnob} />
+          </button>
+        </div>
+
+        {/* Card 3: Focus Mode */}
+        <div className={styles.statusCard}>
+          <div className={`${styles.statusCardIcon} ${focusMode.enabled ? styles.iconPurple : ""}`}>
+            <Eye size={20} strokeWidth={2} />
+          </div>
+          <div className={styles.statusCardBody}>
+            <div className={styles.statusCardLabel}>Focus Mode</div>
+            <div className={styles.statusCardValue}>
+              {focusMode.enabled ? "Enabled" : "Disabled"}
+            </div>
+            {focusMode.enabled && focusMode.allowedDomains.length > 0 && (
+              <div className={styles.statusCardSub}>
+                {focusMode.allowedDomains.length} domain{focusMode.allowedDomains.length !== 1 ? "s" : ""} allowed
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Card 4: Security Score (decorative) */}
+        <div className={styles.statusCard}>
+          <div className={styles.scoreRing}>
+            <svg viewBox="0 0 80 80" className={styles.scoreRingSvg}>
+              <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(80,120,200,0.1)" strokeWidth="6" />
+              <circle
+                cx="40" cy="40" r="34"
+                fill="none"
+                stroke="url(#scoreGrad)"
+                strokeWidth="6"
+                strokeLinecap="round"
+                strokeDasharray={`${0.98 * 2 * Math.PI * 34} ${2 * Math.PI * 34}`}
+                transform="rotate(-90 40 40)"
+              />
+              <defs>
+                <linearGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#00f0ff" />
+                  <stop offset="100%" stopColor="#a855f7" />
+                </linearGradient>
+              </defs>
+            </svg>
+            <div className={styles.scoreValue}>98%</div>
+          </div>
+          <div className={styles.statusCardBody}>
+            <div className={styles.statusCardLabel}>Security Score</div>
+            <div className={styles.statusCardValueDim}>Excellent</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Main Content Grid ── */}
+      <div className={styles.mainGrid}>
+        {/* Left Column */}
+        <div className={styles.leftCol}>
+          {/* Live Screen Panel */}
+          <div className={`${styles.card} ${styles.screenCard}`}>
+            <div className={styles.cardHeader}>
+              <div className={styles.cardTitle}>
+                <Monitor size={15} strokeWidth={2} />
+                Live Screen
+                {screenStreamActive && liveScreenshot && (
+                  <span className={styles.liveBadge}>
+                    <span className={styles.liveDot} />LIVE
+                    {fps > 0 && <span className={styles.fpsTag}>{fps} fps</span>}
+                  </span>
+                )}
+              </div>
+              {liveScreenshot && (
+                <button
+                  className={styles.iconBtn}
+                  onClick={() => setScreenExpanded((p) => !p)}
+                  title={screenExpanded ? "Collapse" : "Expand"}
+                >
+                  {screenExpanded ? <Minimize2 size={14} strokeWidth={2} /> : <Maximize2 size={14} strokeWidth={2} />}
+                </button>
+              )}
+            </div>
+
+            <div className={`${styles.screenDisplay} ${screenExpanded ? styles.screenDisplayExpanded : ""}`}>
+              {liveScreenshot ? (
+                <>
+                  <img src={liveScreenshot} alt="Live screen" className={styles.screenImg} />
+                  <div className={styles.screenOverlay}>
+                    <span className={styles.screenOverlayDot} />
+                    <span>Streaming · {currentTime.toLocaleTimeString()}</span>
+                    {fps > 0 && <span className={styles.screenOverlayFps}>{fps} fps</span>}
+                  </div>
+                </>
+              ) : (
+                <div className={styles.screenPlaceholder}>
+                  <Monitor size={40} strokeWidth={1.2} />
+                  <span>{screenStreamActive ? "Waiting for first frame…" : "Screen stream inactive"}</span>
+                  {!screenStreamActive && backendConnected && extensionOnline && (
+                    <button className={styles.startBtn} onClick={startScreenStream}>
+                      <Eye size={14} strokeWidth={2} /> Start Stream
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Recent Activity Feed */}
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <div className={styles.cardTitle}>
+                <Activity size={15} strokeWidth={2} />
+                Recent Activity
+              </div>
+              <Link href="/activity" className={styles.cardLink}>
+                View all <ArrowRight size={12} strokeWidth={2} />
+              </Link>
+            </div>
+            {recentEntries.length > 0 ? (
+              <div className={styles.activityScroll}>
+                {recentEntries.map((entry, i) => {
+                  const domain = entry.domain || extractDomain(entry.url || "");
+                  const blocked = entry.action === "blocked";
+                  return (
+                    <div key={entry.id || i} className={styles.activityCard}>
+                      <div className={styles.activityCardTop}>
+                        <img
+                          src={faviconUrl(domain)}
+                          alt=""
+                          width={16}
+                          height={16}
+                          className={styles.activityFavicon}
+                          onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
+                        />
+                        <span className={`${styles.activityBadge} ${blocked ? styles.activityBadgeBlocked : styles.activityBadgeAllowed}`}>
+                          {blocked ? "Blocked" : "Allowed"}
+                        </span>
+                      </div>
+                      <div className={styles.activityTitle} title={entry.title || entry.url}>
+                        {entry.title || domain}
+                      </div>
+                      <div className={styles.activityDomain}>{domain}</div>
+                      <div className={styles.activityTime}>
+                        <Clock size={10} strokeWidth={2} />
+                        {formatRelativeTime(entry.timestamp)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className={styles.emptyState}>
+                <Radio size={28} strokeWidth={1.2} />
+                <span>No recent activity</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column */}
+        <div className={styles.rightCol}>
+          {/* Open Tabs Summary */}
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <div className={styles.cardTitle}>
+                <AppWindow size={15} strokeWidth={2} />
+                Open Tabs
+              </div>
+              <Link href="/tabs" className={styles.cardLink}>
+                View all <ArrowRight size={12} strokeWidth={2} />
+              </Link>
+            </div>
+            {openTabs.length > 0 ? (
+              <>
+                <div className={styles.tabsSummary}>
+                  {openTabs.length} tab{openTabs.length !== 1 ? "s" : ""} across {windowCount} window{windowCount !== 1 ? "s" : ""}
+                </div>
+                <div className={styles.tabsList}>
+                  {openTabs.slice(0, 5).map((tab, i) => {
+                    const domain = extractDomain(tab.url || "");
+                    return (
+                      <div key={tab.id || i} className={styles.tabRow}>
+                        <img
+                          src={faviconUrl(domain)}
+                          alt=""
+                          width={14}
+                          height={14}
+                          className={styles.tabFavicon}
+                          onError={(e) => { e.currentTarget.style.visibility = "hidden"; }}
+                        />
+                        <span className={styles.tabTitle} title={tab.title || tab.url}>
+                          {tab.title || domain}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {openTabs.length > 5 && (
+                    <div className={styles.tabMore}>+{openTabs.length - 5} more</div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className={styles.emptyState}>
+                <AppWindow size={28} strokeWidth={1.2} />
+                <span>No open tabs reported</span>
+              </div>
+            )}
+          </div>
+
+          {/* Alerts Panel */}
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <div className={styles.cardTitle}>
+                <AlertTriangle size={15} strokeWidth={2} />
+                Alerts
+                {newAlertCount > 0 && (
+                  <span className={styles.alertBadge}>{newAlertCount > 99 ? "99+" : newAlertCount}</span>
+                )}
+              </div>
+              <Link href="/alerts" className={styles.cardLink}>
+                View all <ArrowRight size={12} strokeWidth={2} />
+              </Link>
+            </div>
+            {latestAlerts.length > 0 ? (
+              <div className={styles.alertList}>
+                {latestAlerts.map((entry, i) => {
+                  const domain = entry.domain || extractDomain(entry.url || "");
+                  return (
+                    <div key={entry.id || i} className={styles.alertRow}>
+                      <div className={styles.alertIcon}>
+                        <ShieldOff size={13} strokeWidth={2.5} />
+                      </div>
+                      <div className={styles.alertContent}>
+                        <div className={styles.alertTitle}>{entry.title || domain}</div>
+                        {entry.reason && <div className={styles.alertReason}>{entry.reason}</div>}
+                      </div>
+                      <div className={styles.alertTime}>{formatRelativeTime(entry.timestamp)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className={styles.emptyState}>
+                <ShieldCheck size={32} strokeWidth={1.2} />
+                <span>No blocked attempts</span>
+                <span className={styles.emptyStateSub}>All clear — no threats detected</span>
+              </div>
+            )}
+          </div>
+
+          {/* Quick Stats */}
+          <div className={styles.miniGrid}>
+            <div className={styles.miniCard}>
+              <Globe size={18} strokeWidth={1.8} className={styles.miniIcon} />
+              <div className={styles.miniValue}>{stats.sitesVisited}</div>
+              <div className={styles.miniLabel}>Sites Visited</div>
+            </div>
+            <div className={styles.miniCard}>
+              <ShieldOff size={18} strokeWidth={1.8} className={`${styles.miniIcon} ${styles.miniIconRed}`} />
+              <div className={styles.miniValue}>{stats.blockedAttempts}</div>
+              <div className={styles.miniLabel}>Blocked</div>
+            </div>
+            <div className={styles.miniCard}>
+              <AppWindow size={18} strokeWidth={1.8} className={styles.miniIcon} />
+              <div className={styles.miniValue}>{stats.activeTabs}</div>
+              <div className={styles.miniLabel}>Active Tabs</div>
+            </div>
+            <div className={styles.miniCard}>
+              <TrendingUp size={18} strokeWidth={1.8} className={`${styles.miniIcon} ${styles.miniIconPurple}`} />
+              <div className={styles.miniValue} title={stats.topDomain}>
+                {stats.topDomain.length > 12 ? stats.topDomain.slice(0, 12) + "…" : stats.topDomain}
+              </div>
+              <div className={styles.miniLabel}>Top Domain</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Bottom Section ── */}
+      <div className={styles.bottomSection}>
+        {/* Activity Timeline */}
+        <div className={styles.card}>
+          <div className={styles.cardHeader}>
+            <div className={styles.cardTitle}>
+              <BarChart3 size={15} strokeWidth={2} />
+              Activity Timeline
+              <span className={styles.cardTitleSub}>Last 2 hours</span>
+            </div>
+          </div>
+          <div className={styles.timelineBar}>
+            {timeline.map((seg, i) => (
+              <div
+                key={i}
+                className={styles.timelineSeg}
+                title={`${seg.allowed} allowed, ${seg.blocked} blocked`}
+              >
+                {seg.total > 0 ? (
+                  <>
+                    {seg.allowed > 0 && (
+                      <div
+                        className={styles.timelineSegGreen}
+                        style={{ flex: seg.allowed }}
+                      />
+                    )}
+                    {seg.blocked > 0 && (
+                      <div
+                        className={styles.timelineSegRed}
+                        style={{ flex: seg.blocked }}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <div className={styles.timelineSegEmpty} />
+                )}
+              </div>
+            ))}
+          </div>
+          <div className={styles.timelineLabels}>
+            <span>2h ago</span>
+            <span>1h ago</span>
+            <span>Now</span>
+          </div>
+        </div>
+
+        {/* Quick Navigation Links */}
+        <div className={styles.quickLinks}>
+          {[
+            { href: "/tabs", Icon: AppWindow, title: "Tabs", desc: "View all open browser tabs" },
+            { href: "/activity", Icon: List, title: "Activity Log", desc: "Full browsing history and events" },
+            { href: "/alerts", Icon: AlertTriangle, title: "Alerts", desc: "Blocked sites and threat alerts" },
+            { href: "/settings", Icon: Settings, title: "Settings", desc: "Configure monitoring preferences" },
+          ].map(({ href, Icon, title, desc }) => (
+            <Link key={href} href={href} className={styles.quickLink}>
+              <div className={styles.quickLinkIcon}>
+                <Icon size={20} strokeWidth={1.8} />
+              </div>
+              <div className={styles.quickLinkBody}>
+                <div className={styles.quickLinkTitle}>{title}</div>
+                <div className={styles.quickLinkDesc}>{desc}</div>
+              </div>
+              <ArrowRight size={16} strokeWidth={2} className={styles.quickLinkArrow} />
+            </Link>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
