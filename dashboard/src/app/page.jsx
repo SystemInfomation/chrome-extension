@@ -34,8 +34,10 @@ function formatRelativeTime(ts) {
 }
 
 function faviconUrl(domain) {
-  const safe = encodeURIComponent(domain);
-  return `https://www.google.com/s2/favicons?domain=${safe}&sz=32`;
+  const url = new URL("https://www.google.com/s2/favicons");
+  url.searchParams.set("domain", domain);
+  url.searchParams.set("sz", "32");
+  return url.toString();
 }
 
 /* ── Main Dashboard ──────────────────────────────────────────────────────── */
