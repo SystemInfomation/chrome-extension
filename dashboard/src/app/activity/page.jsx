@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { List, Search, Filter, Globe, ShieldOff, ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { List, Search, Filter, Globe, ShieldOff, ChevronLeft, ChevronRight, BarChart3 } from "lucide-react";
 import { useMonitor } from "../../context/MonitorContext";
 import styles from "./page.module.css";
 
 export default function ActivityLog() {
-  const { backendUrl } = useMonitor();
+  const { backendUrl, liveEntries } = useMonitor();
 
   const [items,   setItems]   = useState([]);
   const [total,   setTotal]   = useState(0);
@@ -46,6 +46,31 @@ export default function ActivityLog() {
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
 
+  // Activity timeline (last 2 hours)
+  const timeline = useMemo(() => {
+    const now = Date.now();
+    const twoHours = 2 * 60 * 60 * 1000;
+    const start = now - twoHours;
+    const segments = [];
+    const bucketSize = twoHours / 24;
+
+    for (let i = 0; i < 24; i++) {
+      const bStart = start + i * bucketSize;
+      const bEnd = bStart + bucketSize;
+      let allowed = 0;
+      let blocked = 0;
+      for (const e of liveEntries) {
+        const ts = typeof e.timestamp === "string" ? Number(e.timestamp) : e.timestamp;
+        if (ts >= bStart && ts < bEnd) {
+          if (e.action === "blocked") blocked++;
+          else allowed++;
+        }
+      }
+      segments.push({ allowed, blocked, total: allowed + blocked });
+    }
+    return segments;
+  }, [liveEntries]);
+
   return (
     <div className={styles.page}>
       {/* Header */}
@@ -62,6 +87,48 @@ export default function ActivityLog() {
         {!loading && (
           <div className={styles.countBadge}>{total.toLocaleString()} entries</div>
         )}
+      </div>
+
+      {/* Activity Timeline */}
+      <div className={styles.timelineCard}>
+        <div className={styles.timelineHeader}>
+          <BarChart3 size={15} strokeWidth={2} />
+          <span className={styles.timelineTitle}>Activity Timeline</span>
+          <span className={styles.timelineSub}>Last 2 hours</span>
+        </div>
+        <div className={styles.timelineBar}>
+          {timeline.map((seg, i) => (
+            <div
+              key={i}
+              className={styles.timelineSeg}
+              title={`${seg.allowed} allowed, ${seg.blocked} blocked`}
+            >
+              {seg.total > 0 ? (
+                <>
+                  {seg.allowed > 0 && (
+                    <div
+                      className={styles.timelineSegGreen}
+                      style={{ flex: seg.allowed }}
+                    />
+                  )}
+                  {seg.blocked > 0 && (
+                    <div
+                      className={styles.timelineSegRed}
+                      style={{ flex: seg.blocked }}
+                    />
+                  )}
+                </>
+              ) : (
+                <div className={styles.timelineSegEmpty} />
+              )}
+            </div>
+          ))}
+        </div>
+        <div className={styles.timelineLabels}>
+          <span>2h ago</span>
+          <span>1h ago</span>
+          <span>Now</span>
+        </div>
       </div>
 
       {/* Filters */}

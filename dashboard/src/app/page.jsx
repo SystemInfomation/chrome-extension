@@ -1,13 +1,12 @@
 "use client";
 
-import { useRef, useState, useEffect, useCallback, useMemo } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
   Shield, Monitor, Wifi, WifiOff, Globe, ShieldOff, ShieldCheck,
   Clock, Maximize2, Minimize2, Eye, EyeOff, Radio, Lock,
-  AlertTriangle, ArrowRight, AppWindow, List, Settings,
-  Activity, TrendingUp, ChevronDown, Server, Zap,
-  BarChart3, ExternalLink,
+  AlertTriangle, ArrowRight, AppWindow, List,
+  Activity, TrendingUp, ChevronDown, Zap,
 } from "lucide-react";
 import { useMonitor } from "../context/MonitorContext";
 import { usePinAuth } from "../context/PinAuthContext";
@@ -132,31 +131,6 @@ export default function Dashboard() {
     const wins = new Set(openTabs.map((t) => t.windowId));
     return wins.size || 1;
   }, [openTabs]);
-
-  // Activity timeline (last 2 hours)
-  const timeline = useMemo(() => {
-    const now = Date.now();
-    const twoHours = 2 * 60 * 60 * 1000;
-    const start = now - twoHours;
-    const segments = [];
-    const bucketSize = twoHours / 24;
-
-    for (let i = 0; i < 24; i++) {
-      const bStart = start + i * bucketSize;
-      const bEnd = bStart + bucketSize;
-      let allowed = 0;
-      let blocked = 0;
-      for (const e of liveEntries) {
-        const ts = typeof e.timestamp === "string" ? Number(e.timestamp) : e.timestamp;
-        if (ts >= bStart && ts < bEnd) {
-          if (e.action === "blocked") blocked++;
-          else allowed++;
-        }
-      }
-      segments.push({ allowed, blocked, total: allowed + blocked });
-    }
-    return segments;
-  }, [liveEntries]);
 
   const backendConnected = wsStatus === "connected";
 
@@ -558,73 +532,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Bottom Section ── */}
-      <div className={styles.bottomSection}>
-        {/* Activity Timeline */}
-        <div className={styles.card}>
-          <div className={styles.cardHeader}>
-            <div className={styles.cardTitle}>
-              <BarChart3 size={15} strokeWidth={2} />
-              Activity Timeline
-              <span className={styles.cardTitleSub}>Last 2 hours</span>
-            </div>
-          </div>
-          <div className={styles.timelineBar}>
-            {timeline.map((seg, i) => (
-              <div
-                key={i}
-                className={styles.timelineSeg}
-                title={`${seg.allowed} allowed, ${seg.blocked} blocked`}
-              >
-                {seg.total > 0 ? (
-                  <>
-                    {seg.allowed > 0 && (
-                      <div
-                        className={styles.timelineSegGreen}
-                        style={{ flex: seg.allowed }}
-                      />
-                    )}
-                    {seg.blocked > 0 && (
-                      <div
-                        className={styles.timelineSegRed}
-                        style={{ flex: seg.blocked }}
-                      />
-                    )}
-                  </>
-                ) : (
-                  <div className={styles.timelineSegEmpty} />
-                )}
-              </div>
-            ))}
-          </div>
-          <div className={styles.timelineLabels}>
-            <span>2h ago</span>
-            <span>1h ago</span>
-            <span>Now</span>
-          </div>
-        </div>
 
-        {/* Quick Navigation Links */}
-        <div className={styles.quickLinks}>
-          {[
-            { href: "/tabs", Icon: AppWindow, title: "Tabs", desc: "View all open browser tabs" },
-            { href: "/activity", Icon: List, title: "Activity Log", desc: "Full browsing history and events" },
-            { href: "/alerts", Icon: AlertTriangle, title: "Alerts", desc: "Blocked sites and threat alerts" },
-            { href: "/settings", Icon: Settings, title: "Settings", desc: "Configure monitoring preferences" },
-          ].map(({ href, Icon, title, desc }) => (
-            <Link key={href} href={href} className={styles.quickLink}>
-              <div className={styles.quickLinkIcon}>
-                <Icon size={20} strokeWidth={1.8} />
-              </div>
-              <div className={styles.quickLinkBody}>
-                <div className={styles.quickLinkTitle}>{title}</div>
-                <div className={styles.quickLinkDesc}>{desc}</div>
-              </div>
-              <ArrowRight size={16} strokeWidth={2} className={styles.quickLinkArrow} />
-            </Link>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

@@ -281,6 +281,96 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* ── Activity Timeline ── */
+
+.timelineCard {
+  border-radius: var(--radius-lg);
+  background: rgba(14,22,45,0.55);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(80,120,200,0.1);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+  margin-bottom: 18px;
+}
+
+.timelineHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.timelineTitle {
+  letter-spacing: -0.2px;
+}
+
+.timelineSub {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+.timelineBar {
+  display: flex;
+  gap: 3px;
+  padding: 16px 18px 8px;
+  height: 52px;
+  align-items: flex-end;
+}
+
+.timelineSeg {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 1px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.timelineSegGreen {
+  background: var(--green);
+  opacity: 0.6;
+  border-radius: 2px 2px 0 0;
+  min-height: 3px;
+  transition: opacity 0.15s;
+}
+
+.timelineSeg:hover .timelineSegGreen {
+  opacity: 0.9;
+}
+
+.timelineSegRed {
+  background: var(--red);
+  opacity: 0.7;
+  border-radius: 0 0 2px 2px;
+  min-height: 3px;
+  transition: opacity 0.15s;
+}
+
+.timelineSeg:hover .timelineSegRed {
+  opacity: 1;
+}
+
+.timelineSegEmpty {
+  flex: 1;
+  background: rgba(80,120,200,0.06);
+  border-radius: 2px;
+  min-height: 3px;
+}
+
+.timelineLabels {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 18px 14px;
+  font-size: 10px;
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
 @media (max-width: 768px) {
   .page { padding: 16px 12px; }
   .header { flex-direction: column; align-items: flex-start; gap: 10px; margin-bottom: 20px; }
