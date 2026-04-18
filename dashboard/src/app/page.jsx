@@ -17,7 +17,7 @@ import styles from "./page.module.css";
 
 function extractDomain(url) {
   try { return new URL(url).hostname.replace(/^www\./, ""); }
-  catch { return url; }
+  catch { return "unknown"; }
 }
 
 function formatRelativeTime(ts) {
@@ -34,7 +34,8 @@ function formatRelativeTime(ts) {
 }
 
 function faviconUrl(domain) {
-  return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+  const safe = encodeURIComponent(domain);
+  return `https://www.google.com/s2/favicons?domain=${safe}&sz=32`;
 }
 
 /* ── Main Dashboard ──────────────────────────────────────────────────────── */

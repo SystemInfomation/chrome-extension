@@ -223,13 +223,13 @@
   border: 1px solid rgba(80,120,200,0.1);
   box-shadow: var(--shadow-card);
   transition: all 0.25s var(--ease-out);
-  animation: glowPulse 4s ease-in-out infinite;
 }
 
 .statusCard:hover {
   transform: translateY(-2px);
   box-shadow: 0 0 20px rgba(0,240,255,0.08);
   border-color: rgba(0,240,255,0.15);
+  animation: glowPulse 4s ease-in-out infinite;
 }
 
 .statusCardIcon {
