@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { List, Search, Filter, Globe, ShieldOff, ChevronLeft, ChevronRight } from "lucide-react";
 import { useMonitor } from "../../context/MonitorContext";
-import { supabase } from "../../lib/supabase";
 import styles from "./page.module.css";
 
 export default function ActivityLog() {
@@ -24,43 +23,17 @@ export default function ActivityLog() {
     setLoading(true);
     setError(null);
     try {
-      // ── Supabase direct query ───────────────────────────────────────────
-      let query = supabase
-        .from("activity")
-        .select("*", { count: "exact" })
-        .order("timestamp", { ascending: false })
-        .range((page - 1) * LIMIT, page * LIMIT - 1);
-
-      if (action !== "all") {
-        query = query.eq("action", action);
-      }
-      if (search) {
-        query = query.or(`url.ilike.%${search}%,title.ilike.%${search}%`);
-      }
-
-      const { data, error: sbError, count } = await query;
-
-      if (sbError) throw new Error(sbError.message);
-
-      setItems(data || []);
-      setTotal(count || 0);
+      if (!backendUrl) throw new Error("Backend not configured");
+      const params = new URLSearchParams({ page, limit: LIMIT });
+      if (search) params.set("search", search);
+      if (action !== "all") params.set("action", action);
+      const res = await fetch(`${backendUrl}/api/activity?${params}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setItems(data.items || []);
+      setTotal(data.total || 0);
     } catch (err) {
-      // Fallback: try the backend REST API if Supabase fails
-      try {
-        if (!backendUrl || backendUrl.includes("YOUR_RENDER_URL")) {
-          throw new Error("Backend not configured");
-        }
-        const params = new URLSearchParams({ page, limit: LIMIT });
-        if (search) params.set("search", search);
-        if (action !== "all") params.set("action", action);
-        const res = await fetch(`${backendUrl}/api/activity?${params}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        setItems(data.items || []);
-        setTotal(data.total || 0);
-      } catch (fallbackErr) {
-        setError(err.message + " (fallback: " + fallbackErr.message + ")");
-      }
+      setError(err.message);
     } finally {
       setLoading(false);
     }

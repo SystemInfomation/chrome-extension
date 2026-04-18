@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Settings, Plus, Trash2, RefreshCw, Focus, Wifi, WifiOff, Monitor, MonitorOff } from "lucide-react";
 import { useMonitor } from "../../context/MonitorContext";
-import { supabase } from "../../lib/supabase";
 import styles from "./page.module.css";
 
 export default function SettingsPage() {
@@ -31,28 +30,13 @@ export default function SettingsPage() {
     setFilterLoad(true);
     setFilterErr(null);
     try {
-      // ── Supabase direct query ───────────────────────────────────────────
-      const { data, error: sbError } = await supabase
-        .from("custom_filters")
-        .select("domain")
-        .order("domain", { ascending: true });
-
-      if (sbError) throw new Error(sbError.message);
-
-      setFilters((data || []).map((r) => r.domain));
+      if (!backendUrl) throw new Error("Backend not configured");
+      const res = await fetch(`${backendUrl}/api/filters`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setFilters(data.filters || []);
     } catch (err) {
-      // Fallback: try backend REST API
-      try {
-        if (!backendUrl || backendUrl.includes("YOUR_RENDER_URL")) {
-          throw new Error("Backend not configured");
-        }
-        const res = await fetch(`${backendUrl}/api/filters`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        setFilters(data.filters || []);
-      } catch (fallbackErr) {
-        setFilterErr(err.message + " (fallback: " + fallbackErr.message + ")");
-      }
+      setFilterErr(err.message);
     } finally {
       setFilterLoad(false);
     }
@@ -67,22 +51,13 @@ export default function SettingsPage() {
     setAdding(true);
     setFilterErr(null);
     try {
-      // ── Supabase upsert ─────────────────────────────────────────────────
-      const { error: sbError } = await supabase
-        .from("custom_filters")
-        .upsert({ domain }, { onConflict: "domain" });
-
-      if (sbError) throw new Error(sbError.message);
-
-      // Also notify the backend so it broadcasts to extension(s)
-      if (backendUrl && !backendUrl.includes("YOUR_RENDER_URL")) {
-        fetch(`${backendUrl}/api/filters`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ domain }),
-        }).catch(() => { /* best-effort */ });
-      }
-
+      if (!backendUrl) throw new Error("Backend not configured");
+      const res = await fetch(`${backendUrl}/api/filters`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setNewDomain("");
       await loadFilters();
     } catch (err) {
@@ -95,21 +70,11 @@ export default function SettingsPage() {
   async function removeFilter(domain) {
     setFilterErr(null);
     try {
-      // ── Supabase delete ─────────────────────────────────────────────────
-      const { error: sbError } = await supabase
-        .from("custom_filters")
-        .delete()
-        .eq("domain", domain);
-
-      if (sbError) throw new Error(sbError.message);
-
-      // Also notify the backend so it broadcasts to extension(s)
-      if (backendUrl && !backendUrl.includes("YOUR_RENDER_URL")) {
-        fetch(`${backendUrl}/api/filters/${encodeURIComponent(domain)}`, {
-          method: "DELETE",
-        }).catch(() => { /* best-effort */ });
-      }
-
+      if (!backendUrl) throw new Error("Backend not configured");
+      const res = await fetch(`${backendUrl}/api/filters/${encodeURIComponent(domain)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await loadFilters();
     } catch (err) {
       setFilterErr(err.message);
