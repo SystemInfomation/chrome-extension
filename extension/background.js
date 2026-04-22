@@ -166,23 +166,40 @@ let screenStreamTimer = null;
 let screenSendInFlight = false;
 
 /**
- * Capture the active tab and send the screenshot to the monitoring backend.
- * Silently ignores errors (e.g. when the active tab is a chrome:// page).
- * Skips the frame if the previous send is still in flight (backpressure).
- * Uses high JPEG quality for sharp, clear visuals.
+ * Capture the active tab of every normal browser window and send each
+ * screenshot to the monitoring backend.  Windows are captured sequentially
+ * to avoid overwhelming the browser.  Skips the entire cycle if the previous
+ * send is still in flight (backpressure).
+ * Includes windowId and focused flag so the dashboard can show all windows
+ * simultaneously and highlight the active one.
  */
 async function captureAndSendScreenshot() {
   if (screenSendInFlight) return; // skip frame — previous still in transit
   screenSendInFlight = true;
   try {
-    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    if (!tab || !tab.id) return;
-    // Skip extension pages and internal Chrome pages that cannot be captured
-    if (!tab.url || tab.url.startsWith("chrome://") || tab.url.startsWith("chrome-extension://")) return;
-    const dataUrl = await chrome.tabs.captureVisibleTab(null, { format: "jpeg", quality: 85 });
-    wsSend({ type: "screenshot", data: dataUrl, timestamp: Date.now(), url: tab.url, title: tab.title || "" });
+    const windows = await chrome.windows.getAll({ windowTypes: ["normal"] });
+    for (const win of windows) {
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, windowId: win.id });
+        if (!tab || !tab.id) continue;
+        // Skip extension pages and internal Chrome pages that cannot be captured
+        if (!tab.url || tab.url.startsWith("chrome://") || tab.url.startsWith("chrome-extension://")) continue;
+        const dataUrl = await chrome.tabs.captureVisibleTab(win.id, { format: "jpeg", quality: 85 });
+        wsSend({
+          type: "screenshot",
+          data: dataUrl,
+          timestamp: Date.now(),
+          url: tab.url,
+          title: tab.title || "",
+          windowId: win.id,
+          focused: win.focused === true,
+        });
+      } catch (_e) {
+        // Individual window capture may fail (e.g. minimised, no renderable tab) — skip it
+      }
+    }
   } catch (_e) {
-    // Capture may fail if no window is focused or the tab is in an unrenderable state
+    // windows.getAll may fail in edge cases
   } finally {
     screenSendInFlight = false;
   }

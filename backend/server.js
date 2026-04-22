@@ -248,6 +248,60 @@ function dbRemoveFilter(domain) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Daily reset — clear activity + alerts every 24 h at midnight UTC
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Truncate the activity and alerts tables (not custom_filters — those are
+ * configuration) and clear the matching in-memory ring buffers.
+ * Broadcasts a `db_reset` event to all connected dashboards so they can
+ * refresh their data.
+ */
+async function resetDailyData() {
+  console.log("[WatsonCT] Daily reset — clearing activity and alerts.");
+
+  // Clear in-memory buffers immediately so live clients see the clean state
+  recentActivity.length = 0;
+  recentAlerts.length   = 0;
+
+  if (db) {
+    try {
+      await db.query("TRUNCATE TABLE activity, alerts");
+      console.log("[WatsonCT DB] activity and alerts tables truncated.");
+    } catch (err) {
+      console.error("[WatsonCT DB] daily reset failed:", err.message);
+    }
+  }
+
+  // Notify all connected dashboards so they can refresh their views
+  broadcast({ type: "db_reset", timestamp: Date.now() }, "dashboard");
+}
+
+/**
+ * Schedule `resetDailyData` to run at the next UTC midnight and then every
+ * 24 hours thereafter.  Using a single-shot timeout aligned to midnight rather
+ * than a plain 24 h interval means the reset always happens at the same wall-
+ * clock time regardless of when the server started.
+ */
+function scheduleMidnightReset() {
+  const now         = Date.now();
+  const nextMidnight = (() => {
+    const d = new Date(now);
+    // Advance to the start of the next UTC day
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1);
+  })();
+  const msUntilMidnight = nextMidnight - now;
+
+  console.log(`[WatsonCT] Daily reset scheduled in ${Math.round(msUntilMidnight / 60_000)} minutes (at next UTC midnight).`);
+
+  setTimeout(() => {
+    resetDailyData();
+    // After the first aligned reset, repeat exactly every 24 h
+    setInterval(resetDailyData, 24 * 60 * 60 * 1000);
+  }, msUntilMidnight);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Simple in-memory rate limiter
 // Limits each IP to MAX_REQUESTS within WINDOW_MS on protected routes.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -666,8 +720,10 @@ wss.on("connection", (ws, req) => {
             type:      "screenshot",
             data:      msg.data,
             timestamp: msg.timestamp || Date.now(),
-            url:       msg.url   || "",
-            title:     msg.title || "",
+            url:       msg.url      || "",
+            title:     msg.title    || "",
+            windowId:  msg.windowId ?? null,
+            focused:   msg.focused  === true,
           },
           "dashboard"
         );
@@ -777,6 +833,9 @@ async function start() {
   // Initialise DB schema and load persisted filters before accepting traffic
   await initDb();
   await loadFiltersFromDb();
+
+  // Schedule the daily 24 h data reset (activity + alerts) at UTC midnight
+  scheduleMidnightReset();
 
   server.listen(PORT, () => {
     console.log(`[WatsonCT] Server listening on port ${PORT}`);
