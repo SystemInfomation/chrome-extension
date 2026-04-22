@@ -666,8 +666,10 @@ wss.on("connection", (ws, req) => {
             type:      "screenshot",
             data:      msg.data,
             timestamp: msg.timestamp || Date.now(),
-            url:       msg.url   || "",
-            title:     msg.title || "",
+            url:       msg.url      || "",
+            title:     msg.title    || "",
+            windowId:  msg.windowId ?? null,
+            focused:   msg.focused  === true,
           },
           "dashboard"
         );

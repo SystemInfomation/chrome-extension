@@ -14,10 +14,11 @@
  *  - toggleInternetBlock(): toggle the internet block on/off
  *  - backendUrl:          string — configurable backend HTTP(S) URL
  *  - setBackendUrl():     update and persist backend URL
- *  - liveScreenshot:      string|null — latest screenshot data URL from extension
+ *  - liveScreenshot:      string|null — latest screenshot of the focused window (backward compat)
  *  - screenStreamActive:  boolean — whether live screen stream is running
  *  - startScreenStream(): ask the extension to start sending screenshots
  *  - stopScreenStream():  ask the extension to stop sending screenshots
+ *  - windowScreenshots:   Map<string, {data, focused, url, title, timestamp}> — per-window screenshots
  *  - openTabs:            Tab[] — open browser tabs on the monitored device
  *  - closeTab(tabId):     close a tab on the monitored device
  *  - focusMode:           { enabled: boolean, allowedDomains: string[] }
@@ -56,6 +57,8 @@ export function MonitorProvider({ children }) {
   const [newAlertCount, setAlertCount]         = useState(0);
   const [liveScreenshot, setLiveScreenshot]    = useState(null);
   const [screenStreamActive, setStreamActive] = useState(false);
+  // Per-window screenshots: Map<windowKey, { data, focused, url, title, timestamp }>
+  const [windowScreenshots, setWindowScreenshots] = useState(new Map());
   const [openTabs, setOpenTabs]               = useState([]);
   const [internetBlocked, setInternetBlocked] = useState(false);
   const [focusMode, setFocusModeState]        = useState({ enabled: false, allowedDomains: [] });
@@ -118,11 +121,28 @@ export function MonitorProvider({ children }) {
           setStreamActive(true);
         }
       } else if (msg.type === "screenshot" && msg.data) {
-        setLiveScreenshot(msg.data);
+        const key = msg.windowId != null ? String(msg.windowId) : "default";
+        const entry = {
+          data: msg.data,
+          focused: msg.focused === true,
+          url: msg.url || "",
+          title: msg.title || "",
+          timestamp: msg.timestamp || Date.now(),
+        };
+        setWindowScreenshots((prev) => {
+          const next = new Map(prev);
+          next.set(key, entry);
+          return next;
+        });
+        // Keep liveScreenshot pointing at the focused/active window for backward compat
+        if (entry.focused || msg.windowId == null) {
+          setLiveScreenshot(msg.data);
+        }
         setStreamActive(true);
       } else if (msg.type === "screen_stream_stopped") {
         setStreamActive(false);
         setLiveScreenshot(null);
+        setWindowScreenshots(new Map());
       } else if (msg.type === "open_tabs" && Array.isArray(msg.tabs)) {
         setOpenTabs(msg.tabs);
       } else if (msg.type === "internet_status") {
@@ -139,6 +159,7 @@ export function MonitorProvider({ children }) {
       if (!mountedRef.current) return;
       setWsStatus("disconnected");
       setStreamActive(false);
+      setWindowScreenshots(new Map());
       wsRef.current = null;
       const delay = Math.min(backoffRef.current, 30_000);
       backoffRef.current = Math.min(delay * 2, 30_000);
@@ -192,6 +213,7 @@ export function MonitorProvider({ children }) {
     }
     setStreamActive(false);
     setLiveScreenshot(null);
+    setWindowScreenshots(new Map());
   }, []);
 
   const toggleInternetBlock = useCallback(() => {
@@ -246,6 +268,7 @@ export function MonitorProvider({ children }) {
         screenStreamActive,
         startScreenStream,
         stopScreenStream,
+        windowScreenshots,
         openTabs,
         closeTab,
         internetBlocked,
