@@ -152,6 +152,10 @@ export function MonitorProvider({ children }) {
           enabled: msg.enabled === true,
           allowedDomains: Array.isArray(msg.allowedDomains) ? msg.allowedDomains : [],
         });
+      } else if (msg.type === "db_reset") {
+        // Server performed its daily reset — clear in-memory live feed and alerts
+        setLiveEntries([]);
+        setAlertCount(0);
       }
     };
 
