@@ -8,7 +8,7 @@ import { Input } from "../../components/ui/input";
 import styles from "./page.module.css";
 
 export default function ActivityLog() {
-  const { backendUrl, liveEntries, selectedMonitoredUserId } = useMonitor();
+  const { backendUrl, liveEntries, selectedMonitoredUserId, selectedUserLabel } = useMonitor();
 
   const [items,   setItems]   = useState([]);
   const [total,   setTotal]   = useState(0);
@@ -84,7 +84,7 @@ export default function ActivityLog() {
           </div>
           <div>
             <h1 className={styles.title}>Activity Log</h1>
-            <p className={styles.subtitle}>Full browsing history</p>
+            <p className={styles.subtitle}>Full browsing history for {selectedUserLabel}</p>
           </div>
         </div>
         {!loading && (

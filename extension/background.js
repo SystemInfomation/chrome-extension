@@ -2225,20 +2225,36 @@ chrome.alarms.create("keepAlive", { periodInMinutes: 1 });
  * Retrieves the signed-in Chrome user's email and stores it so the popup can
  * display the real user name and the monitoring backend can identify the device.
  */
+function deriveDisplayNameFromEmail(email) {
+  if (!email || typeof email !== "string" || !email.includes("@")) return "";
+  const localPart = email.split("@")[0];
+  return localPart
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
+    .join(" ");
+}
+
 function fetchUserIdentity() {
   if (!chrome.identity || !chrome.identity.getProfileUserInfo) return;
   chrome.identity.getProfileUserInfo({ accountStatus: "ANY" }, (info) => {
     if (chrome.runtime.lastError) return;
     const email = (info && info.email) || "";
     const id    = (info && info.id)    || "";
+    const displayName = deriveDisplayNameFromEmail(email);
     const derivedMonitoredUserId = (id || email || monitoredUserId).trim().toLowerCase() || monitoredUserId;
     monitoredUserId = derivedMonitoredUserId;
-    chrome.storage.local.set({ userEmail: email, userId: id });
+    chrome.storage.local.set({ userEmail: email, userId: id, userDisplayName: displayName });
     chrome.storage.local.set({ monitoredUserId: derivedMonitoredUserId });
-    // Report identity to monitoring backend
-    if (email) {
-      wsSend({ type: "identity", email, id, monitoredUserId: derivedMonitoredUserId, timestamp: Date.now() });
-    }
+    // Report identity to monitoring backend (email may be empty on unmanaged profiles)
+    wsSend({
+      type: "identity",
+      email,
+      displayName,
+      id,
+      monitoredUserId: derivedMonitoredUserId,
+      timestamp: Date.now(),
+    });
   });
 }
 

@@ -10,7 +10,7 @@ import { Input } from "../../components/ui/input";
 import styles from "./page.module.css";
 
 export default function TabsPage() {
-  const { openTabs, closeTab, wsStatus, extensionOnline, selectedMonitoredUserId } = useMonitor();
+  const { openTabs, closeTab, wsStatus, extensionOnline, selectedUserLabel } = useMonitor();
   const [search, setSearch] = useState("");
 
   const canManage = wsStatus === "connected" && extensionOnline;
@@ -45,7 +45,7 @@ export default function TabsPage() {
           <div>
             <h1 className={styles.title}>Open Tabs</h1>
             <p className={styles.subtitle}>
-              User: {selectedMonitoredUserId} ·{" "}
+              User: {selectedUserLabel} ·{" "}
               {openTabs.length} tab{openTabs.length !== 1 ? "s" : ""} across{" "}
               {new Set(openTabs.map((t) => t.windowId)).size} window
               {new Set(openTabs.map((t) => t.windowId)).size !== 1 ? "s" : ""}

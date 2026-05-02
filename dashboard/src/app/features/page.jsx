@@ -44,7 +44,7 @@ export default function FeaturesPage() {
   const {
     wsStatus, liveEntries, newAlertCount,
     openTabs, internetBlocked, toggleInternetBlock,
-    focusMode, selectedMonitoredUserId,
+    focusMode, selectedUserLabel,
   } = useMonitor();
 
   const backendConnected = wsStatus === "connected";
@@ -98,7 +98,7 @@ export default function FeaturesPage() {
           </div>
           <div>
             <h1 className={styles.title}>Features</h1>
-            <p className={styles.subtitle}>Controls, activity &amp; monitoring overview for {selectedMonitoredUserId}</p>
+            <p className={styles.subtitle}>Controls, activity &amp; monitoring overview for {selectedUserLabel}</p>
           </div>
         </div>
       </div>

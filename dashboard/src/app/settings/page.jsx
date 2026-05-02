@@ -11,7 +11,7 @@ import styles from "./page.module.css";
 export default function SettingsPage() {
   const {
     wsStatus, extensionOnline, backendUrl,
-    selectedMonitoredUserId,
+    selectedMonitoredUserId, selectedUserLabel,
     focusMode, setFocusMode, updateFocusDomains,
     internetBlocked, toggleInternetBlock,
     screenStreamActive, startScreenStream, stopScreenStream,
@@ -95,7 +95,7 @@ export default function SettingsPage() {
           </div>
           <div>
             <h1 className={styles.title}>Settings</h1>
-            <p className={styles.subtitle}>Configure monitoring & filters for {selectedMonitoredUserId}</p>
+            <p className={styles.subtitle}>Configure monitoring & filters for {selectedUserLabel}</p>
           </div>
         </div>
       </div>

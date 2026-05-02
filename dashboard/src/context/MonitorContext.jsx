@@ -63,6 +63,13 @@ function getUserStateFromMap(stateMap, userId) {
   return stateMap.get(key) || createDefaultUserState();
 }
 
+function getUserDisplayLabel(user) {
+  if (!user) return DEFAULT_USER_ID;
+  if (user.displayName && user.displayName.trim()) return user.displayName.trim();
+  if (user.email && user.email.trim()) return user.email.trim();
+  return user.monitoredUserId || DEFAULT_USER_ID;
+}
+
 export function MonitorProvider({ children }) {
   const [backendUrl, setBackendUrlState] = useState(DEFAULT_BACKEND_URL);
   const [selectedMonitoredUserId, setSelectedMonitoredUserId] = useState(DEFAULT_USER_ID);
@@ -83,6 +90,10 @@ export function MonitorProvider({ children }) {
   const selectedUserState = useMemo(
     () => getUserStateFromMap(liveStateByUser, selectedMonitoredUserId),
     [liveStateByUser, selectedMonitoredUserId]
+  );
+  const selectedUserProfile = useMemo(
+    () => monitoredUsers.find((u) => u.monitoredUserId === selectedMonitoredUserId) || null,
+    [monitoredUsers, selectedMonitoredUserId]
   );
 
   const wsRef        = useRef(null);
@@ -222,7 +233,15 @@ export function MonitorProvider({ children }) {
       } else if (msg.type === "identity") {
         setMonitoredUsers((prev) => {
           const map = new Map(prev.map((u) => [u.monitoredUserId, u]));
-          map.set(userId, { monitoredUserId: userId, online: true, email: msg.email || "" });
+          const existing = map.get(userId) || { monitoredUserId: userId, online: true };
+          map.set(userId, {
+            ...existing,
+            monitoredUserId: userId,
+            online: true,
+            email: msg.email || existing.email || "",
+            displayName: msg.displayName || existing.displayName || "",
+            lastSeen: msg.timestamp || Date.now(),
+          });
           return [...map.values()].sort((a, b) => a.monitoredUserId.localeCompare(b.monitoredUserId));
         });
       }
@@ -410,6 +429,9 @@ export function MonitorProvider({ children }) {
     setFocusMode,
     updateFocusDomains,
     monitoredUsers,
+    selectedUserProfile,
+    selectedUserLabel: getUserDisplayLabel(selectedUserProfile),
+    getUserDisplayLabel,
     selectedMonitoredUserId,
     setSelectedMonitoredUserId: setSelectedUser,
     refreshMonitoredUsers,
@@ -428,6 +450,7 @@ export function MonitorProvider({ children }) {
     setFocusMode,
     updateFocusDomains,
     monitoredUsers,
+    selectedUserProfile,
     selectedMonitoredUserId,
     setSelectedUser,
     refreshMonitoredUsers,

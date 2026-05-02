@@ -29,7 +29,9 @@ export default function RootLayout({ children }) {
               <div className="appShell">
                 <Sidebar />
                 <main id="app-main-content" className="appMain" role="main">
-                  {children}
+                  <div className="appMainInner glass">
+                    {children}
+                  </div>
                 </main>
               </div>
             </MonitorProvider>

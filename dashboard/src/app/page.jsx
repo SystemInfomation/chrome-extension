@@ -63,7 +63,7 @@ export default function Dashboard() {
   const {
     wsStatus, extensionOnline,
     liveScreenshot, screenStreamActive, startScreenStream, stopScreenStream,
-    windowScreenshots, selectedMonitoredUserId,
+    windowScreenshots, selectedUserLabel,
   } = useMonitor();
 
   const [screenExpanded, setScreenExpanded] = useState(false);
@@ -116,7 +116,7 @@ export default function Dashboard() {
         <div className={styles.cardHeader}>
           <div className={styles.cardTitle}>
             <Monitor size={15} strokeWidth={2} />
-            Live Screen ({selectedMonitoredUserId})
+            Live Screen ({selectedUserLabel})
             {screenStreamActive && hasScreenshot && (
               <span className={styles.liveBadge}>
                 <span className={styles.liveDot} />LIVE

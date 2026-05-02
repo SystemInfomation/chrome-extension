@@ -14,7 +14,7 @@ const SEVERITY_META = {
 };
 
 export default function Alerts() {
-  const { backendUrl, clearAlerts, selectedMonitoredUserId } = useMonitor();
+  const { backendUrl, clearAlerts, selectedMonitoredUserId, selectedUserLabel } = useMonitor();
 
   const [items,   setItems]   = useState([]);
   const [total,   setTotal]   = useState(0);
@@ -57,7 +57,7 @@ export default function Alerts() {
           </div>
           <div>
             <h1 className={styles.title}>Alerts</h1>
-            <p className={styles.subtitle}>Blocked site access attempts</p>
+            <p className={styles.subtitle}>Blocked site access attempts for {selectedUserLabel}</p>
           </div>
         </div>
         {!loading && (

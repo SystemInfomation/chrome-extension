@@ -113,6 +113,14 @@ async function initDb() {
       );
       ALTER TABLE custom_filters ADD COLUMN IF NOT EXISTS monitored_user_id TEXT NOT NULL DEFAULT 'default';
       CREATE UNIQUE INDEX IF NOT EXISTS custom_filters_user_domain_idx ON custom_filters (monitored_user_id, domain);
+
+      CREATE TABLE IF NOT EXISTS monitored_user_profiles (
+        monitored_user_id TEXT PRIMARY KEY,
+        email TEXT NOT NULL DEFAULT '',
+        display_name TEXT NOT NULL DEFAULT '',
+        last_seen BIGINT NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS monitored_user_profiles_last_seen_idx ON monitored_user_profiles (last_seen DESC);
     `);
     console.log("[WatsonCT DB] Schema ready.");
   } catch (err) {
@@ -138,6 +146,9 @@ const MAX_ALERT_SIZE = 500;
 
 /** @type {Map<string, Set<string>>} Custom blocked domains by monitored user */
 const customFiltersByUser = new Map();
+
+/** @type {Map<string, { monitoredUserId: string, email: string, displayName: string, online: boolean, lastSeen: number }>} */
+const monitoredUserProfiles = new Map();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -169,6 +180,24 @@ function getFiltersForUser(monitoredUserId) {
   const key = normalizeMonitoredUserId(monitoredUserId);
   if (!customFiltersByUser.has(key)) customFiltersByUser.set(key, new Set());
   return customFiltersByUser.get(key);
+}
+
+function ensureMonitoredUserProfile(monitoredUserId, patch = {}) {
+  const key = normalizeMonitoredUserId(monitoredUserId);
+  const existing = monitoredUserProfiles.get(key) || {
+    monitoredUserId: key,
+    email: "",
+    displayName: "",
+    online: false,
+    lastSeen: Date.now(),
+  };
+  const next = {
+    ...existing,
+    ...patch,
+    monitoredUserId: key,
+  };
+  monitoredUserProfiles.set(key, next);
+  return next;
 }
 
 function extractDomain(url) {
@@ -262,6 +291,44 @@ async function loadFiltersFromDb() {
   } catch (err) {
     console.error("[WatsonCT DB] load filters:", err.message);
   }
+}
+
+async function loadMonitoredUserProfilesFromDb() {
+  if (!db) return;
+  try {
+    const { rows } = await db.query(`
+      SELECT monitored_user_id, email, display_name, last_seen
+      FROM monitored_user_profiles
+    `);
+    for (const row of rows) {
+      ensureMonitoredUserProfile(row.monitored_user_id, {
+        email: row.email || "",
+        displayName: row.display_name || "",
+        lastSeen: Number(row.last_seen) || Date.now(),
+        online: false,
+      });
+    }
+  } catch (err) {
+    console.error("[WatsonCT DB] load monitored user profiles:", err.message);
+  }
+}
+
+function dbUpsertMonitoredUserProfile(monitoredUserId, profile = {}) {
+  if (!db) return;
+  const normalized = normalizeMonitoredUserId(monitoredUserId);
+  const email = typeof profile.email === "string" ? profile.email : "";
+  const displayName = typeof profile.displayName === "string" ? profile.displayName : "";
+  const lastSeen = Number(profile.lastSeen) || Date.now();
+  db.query(
+    `INSERT INTO monitored_user_profiles (monitored_user_id, email, display_name, last_seen)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (monitored_user_id)
+     DO UPDATE SET
+       email = EXCLUDED.email,
+       display_name = EXCLUDED.display_name,
+       last_seen = EXCLUDED.last_seen`,
+    [normalized, email, displayName, lastSeen]
+  ).catch((err) => console.error("[WatsonCT DB] upsert monitored user profile:", err.message));
 }
 
 /** Persist a filter addition to the database (fire-and-forget). */
@@ -424,22 +491,51 @@ app.get("/api/monitored-users", async (_req, res) => {
   );
 
   const users = new Map();
+  for (const [id, profile] of monitoredUserProfiles.entries()) {
+    users.set(id, {
+      monitoredUserId: id,
+      email: profile.email || "",
+      displayName: profile.displayName || "",
+      online: connected.has(id),
+      lastSeen: profile.lastSeen || Date.now(),
+    });
+  }
   for (const monitoredUserId of connected) {
-    users.set(monitoredUserId, { monitoredUserId, online: true });
+    const existing = users.get(monitoredUserId) || {
+      monitoredUserId,
+      email: "",
+      displayName: "",
+      lastSeen: Date.now(),
+    };
+    users.set(monitoredUserId, { ...existing, online: true });
   }
 
   if (db) {
     try {
       const { rows } = await db.query(`
-        SELECT monitored_user_id FROM activity
+        SELECT monitored_user_id, '' AS email, '' AS display_name, MAX(timestamp) AS last_seen FROM activity GROUP BY monitored_user_id
         UNION
-        SELECT monitored_user_id FROM alerts
+        SELECT monitored_user_id, '' AS email, '' AS display_name, MAX(timestamp) AS last_seen FROM alerts GROUP BY monitored_user_id
         UNION
-        SELECT monitored_user_id FROM custom_filters
+        SELECT monitored_user_id, '' AS email, '' AS display_name, 0 AS last_seen FROM custom_filters
+        UNION
+        SELECT monitored_user_id, email, display_name, last_seen FROM monitored_user_profiles
       `);
       for (const row of rows) {
         const id = normalizeMonitoredUserId(row.monitored_user_id);
-        if (!users.has(id)) users.set(id, { monitoredUserId: id, online: connected.has(id) });
+        const existing = users.get(id) || {
+          monitoredUserId: id,
+          email: "",
+          displayName: "",
+          lastSeen: 0,
+        };
+        users.set(id, {
+          monitoredUserId: id,
+          email: existing.email || row.email || "",
+          displayName: existing.displayName || row.display_name || "",
+          online: connected.has(id),
+          lastSeen: Math.max(existing.lastSeen || 0, Number(row.last_seen) || 0),
+        });
       }
     } catch (err) {
       console.error("[WatsonCT DB] GET /api/monitored-users:", err.message);
@@ -447,7 +543,7 @@ app.get("/api/monitored-users", async (_req, res) => {
   }
 
   if (users.size === 0) {
-    users.set("default", { monitoredUserId: "default", online: false });
+    users.set("default", { monitoredUserId: "default", email: "", displayName: "", online: false, lastSeen: 0 });
   }
 
   res.json({ users: [...users.values()].sort((a, b) => a.monitoredUserId.localeCompare(b.monitoredUserId)) });
@@ -752,6 +848,7 @@ wss.on("connection", (ws, req) => {
   console.log(`[WatsonCT WS] ${role}:${monitoredUserId} connected (${clients.size} total)`);
 
   if (role === "extension") {
+    ensureMonitoredUserProfile(monitoredUserId, { online: true, lastSeen: Date.now() });
     broadcast({ type: "status", status: "online", monitoredUserId }, "dashboard", monitoredUserId);
     const filters = Array.from(getFiltersForUser(monitoredUserId));
     if (filters.length > 0) {
@@ -905,11 +1002,19 @@ wss.on("connection", (ws, req) => {
     } else if (msg.type === "identity" && role === "extension") {
       const identityUser = normalizeMonitoredUserId(msg.monitoredUserId || msg.id || msg.email || monitoredUserId);
       clients.set(ws, { role, monitoredUserId: identityUser });
+      const profile = ensureMonitoredUserProfile(identityUser, {
+        email: typeof msg.email === "string" ? msg.email : "",
+        displayName: typeof msg.displayName === "string" ? msg.displayName : "",
+        online: true,
+        lastSeen: Date.now(),
+      });
+      dbUpsertMonitoredUserProfile(identityUser, profile);
       broadcast(
         {
           type: "identity",
           monitoredUserId: identityUser,
-          email: msg.email || "",
+          email: profile.email || "",
+          displayName: profile.displayName || "",
           id: msg.id || "",
           status: "online",
         },
@@ -935,6 +1040,7 @@ wss.on("connection", (ws, req) => {
       (m) => m.role === "extension" && m.monitoredUserId === monitoredUserId
     );
     if (!anyExtensionForUser && role === "extension") {
+      ensureMonitoredUserProfile(monitoredUserId, { online: false, lastSeen: Date.now() });
       broadcast({ type: "status", monitoredUserId, status: "offline" }, "dashboard", monitoredUserId);
       broadcast({ type: "screen_stream_stopped", monitoredUserId }, "dashboard", monitoredUserId);
     }
@@ -954,6 +1060,7 @@ async function start() {
   // Initialise DB schema and load persisted filters before accepting traffic
   await initDb();
   await loadFiltersFromDb();
+  await loadMonitoredUserProfilesFromDb();
 
   // Schedule the daily 24 h data reset (activity + alerts) at UTC midnight
   scheduleMidnightReset();

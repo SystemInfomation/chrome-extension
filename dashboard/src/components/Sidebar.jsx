@@ -24,6 +24,9 @@ export default function Sidebar() {
     newAlertCount,
     openTabs,
     monitoredUsers,
+    selectedUserProfile,
+    selectedUserLabel,
+    getUserDisplayLabel,
     selectedMonitoredUserId,
     setSelectedMonitoredUserId,
     refreshMonitoredUsers,
@@ -67,7 +70,7 @@ export default function Sidebar() {
           >
             {monitoredUsers.map((user) => (
               <option key={user.monitoredUserId} value={user.monitoredUserId}>
-                {user.monitoredUserId} {user.online ? "(online)" : "(offline)"}
+                {getUserDisplayLabel(user)} {user.online ? "(online)" : "(offline)"}
               </option>
             ))}
           </select>
@@ -80,6 +83,11 @@ export default function Sidebar() {
             ↻
           </button>
         </div>
+        {selectedUserProfile?.email ? (
+          <div className={styles.userPickerMeta}>{selectedUserProfile.email}</div>
+        ) : (
+          <div className={styles.userPickerMeta}>{selectedUserLabel}</div>
+        )}
       </div>
 
       {/* Navigation */}
