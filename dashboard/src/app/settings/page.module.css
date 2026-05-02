@@ -358,6 +358,11 @@
   font-weight: 500;
 }
 
+.controlBtn {
+  min-width: 118px;
+  justify-content: center;
+}
+
 .btnDanger {
   background: var(--red);
   color: #fff;

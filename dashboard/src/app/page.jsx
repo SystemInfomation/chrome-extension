@@ -16,44 +16,17 @@ function getPlaceholderMessage(streaming, backend, extension) {
   return "Starting stream…";
 }
 
-/* ── GlitchFreeImg — double-buffer to avoid flicker on rapid src updates ─── */
-
-function GlitchFreeImg({ src, alt, className }) {
-  const aRef = useRef(null);
-  const bRef = useRef(null);
-  // "a" is the currently visible buffer; "b" is loading the next frame
-  const visibleRef = useRef("a");
-
-  useEffect(() => {
-    if (!src) return;
-    const nextBuf = visibleRef.current === "a" ? "b" : "a";
-    const nextImg = nextBuf === "a" ? aRef.current : bRef.current;
-    const curImg  = nextBuf === "a" ? bRef.current : aRef.current;
-    if (!nextImg || !curImg) return;
-
-    const onLoad = () => {
-      // Swap: make the newly-loaded image visible, hide the old one
-      nextImg.style.opacity = "1";
-      nextImg.style.zIndex  = "2";
-      curImg.style.opacity  = "0";
-      curImg.style.zIndex   = "1";
-      visibleRef.current = nextBuf;
-    };
-
-    nextImg.onload = onLoad;
-    nextImg.src    = src;
-
-    // If the image is already cached it fires load synchronously in some browsers
-    if (nextImg.complete && nextImg.naturalWidth > 0) onLoad();
-  }, [src]);
-
+/* ── FrameImg — single-frame renderer (stable under rapid updates) ───────── */
+function FrameImg({ src, alt, className }) {
   return (
-    <div className={styles.bufferWrap}>
-      <img ref={aRef} alt={alt} className={`${className} ${styles.bufferImg}`}
-           style={{ opacity: 1, zIndex: 2 }} />
-      <img ref={bRef} alt={alt} className={`${className} ${styles.bufferImg}`}
-           style={{ opacity: 0, zIndex: 1 }} />
-    </div>
+    <img
+      src={src}
+      alt={alt}
+      className={`${className} ${styles.bufferImg}`}
+      loading="eager"
+      decoding="sync"
+      draggable={false}
+    />
   );
 }
 
@@ -158,7 +131,7 @@ export default function Dashboard() {
           <div className={styles.primaryDisplay}>
             {activeEntry ? (
               <>
-                <GlitchFreeImg
+                <FrameImg
                   src={activeEntry.data}
                   alt="Active window"
                   className={styles.screenImg}
@@ -198,7 +171,7 @@ export default function Dashboard() {
             <div className={styles.secondaryRow}>
               {secondaryEntries.map(([key, entry]) => (
                 <div key={key} className={styles.secondaryWindow}>
-                  <GlitchFreeImg
+                  <FrameImg
                     src={entry.data}
                     alt="Background window"
                     className={styles.secondaryImg}

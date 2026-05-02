@@ -351,6 +351,7 @@ export function MonitorProvider({ children }) {
 
   const toggleInternetBlock = useCallback(() => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    if (!selectedUserState.extensionOnline) return;
     const newState = !selectedUserState.internetBlocked;
     wsRef.current.send(JSON.stringify({ type: "set_internet_blocked", monitoredUserId: selectedMonitoredUserId, blocked: newState }));
     setLiveStateByUser((prev) => {
@@ -359,7 +360,7 @@ export function MonitorProvider({ children }) {
       next.set(selectedMonitoredUserId, { ...current, internetBlocked: newState });
       return next;
     });
-  }, [selectedMonitoredUserId, selectedUserState.internetBlocked]);
+  }, [selectedMonitoredUserId, selectedUserState.extensionOnline, selectedUserState.internetBlocked]);
 
   // ── Tab management ──────────────────────────────────────────────────────
 

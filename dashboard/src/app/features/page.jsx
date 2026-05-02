@@ -43,11 +43,11 @@ function faviconUrl(domain) {
 export default function FeaturesPage() {
   const {
     wsStatus, liveEntries, newAlertCount,
-    openTabs, internetBlocked, toggleInternetBlock,
+    openTabs, internetBlocked, toggleInternetBlock, extensionOnline,
     focusMode, selectedUserLabel,
   } = useMonitor();
 
-  const backendConnected = wsStatus === "connected";
+  const canControl = wsStatus === "connected" && extensionOnline;
 
   // Computed stats
   const stats = useMemo(() => {
@@ -119,7 +119,7 @@ export default function FeaturesPage() {
           <Switch
             checked={internetBlocked}
             onCheckedChange={toggleInternetBlock}
-            disabled={!backendConnected}
+            disabled={!canControl}
             aria-label={internetBlocked ? "Unblock internet" : "Block internet"}
           />
         </div>

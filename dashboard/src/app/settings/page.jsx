@@ -168,11 +168,12 @@ export default function SettingsPage() {
               </span>
             </div>
             {screenStreamActive ? (
-              <Button variant="destructive" size="sm" onClick={stopScreenStream}>
+              <Button className={styles.controlBtn} variant="destructive" size="sm" onClick={stopScreenStream}>
                 <MonitorOff size={14} strokeWidth={2} /> Stop
               </Button>
             ) : (
               <Button
+                className={styles.controlBtn}
                 onClick={startScreenStream}
                 disabled={!canControl}
                 title={!canControl ? "Extension must be online to start streaming" : "Start live screen stream"}

@@ -182,14 +182,15 @@
 }
 
 .bufferImg {
+  display: block;
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
   image-rendering: auto;
-  /* No CSS transition — we swap immediately to avoid lag */
-  will-change: opacity;
+  will-change: transform;
+  background: #050810;
 }
 
 /* Alias used in JSX for the outer img className */
