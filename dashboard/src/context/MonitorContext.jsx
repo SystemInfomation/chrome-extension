@@ -156,8 +156,16 @@ export function MonitorProvider({ children }) {
         const online = msg.status === "online";
         setMonitoredUsers((prev) => {
           const map = new Map(prev.map((u) => [u.monitoredUserId, u]));
-          map.set(userId, { monitoredUserId: userId, online });
-          return [...map.values()].sort((a, b) => a.monitoredUserId.localeCompare(b.monitoredUserId));
+          const existing = map.get(userId) || { monitoredUserId: userId };
+          map.set(userId, { ...existing, monitoredUserId: userId, online });
+          const nextUsers = [...map.values()].sort((a, b) => a.monitoredUserId.localeCompare(b.monitoredUserId));
+          setSelectedMonitoredUserId((currentSelected) => {
+            const selected = nextUsers.find((u) => u.monitoredUserId === currentSelected);
+            if (selected?.online) return currentSelected;
+            const firstOnline = nextUsers.find((u) => u.online);
+            return firstOnline?.monitoredUserId || currentSelected;
+          });
+          return nextUsers;
         });
         setLiveStateByUser((prev) => {
           const next = new Map(prev);
@@ -285,7 +293,12 @@ export function MonitorProvider({ children }) {
         setMonitoredUsers(data.users);
         setSelectedMonitoredUserId((prev) => {
           const exists = data.users.some((u) => u.monitoredUserId === prev);
-          return exists ? prev : data.users[0].monitoredUserId;
+          if (exists) {
+            const selected = data.users.find((u) => u.monitoredUserId === prev);
+            if (selected?.online) return prev;
+          }
+          const firstOnline = data.users.find((u) => u.online);
+          return firstOnline?.monitoredUserId || data.users[0].monitoredUserId;
         });
       }
     } catch {
