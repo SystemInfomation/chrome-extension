@@ -51,6 +51,42 @@
   font-weight: 500;
 }
 
+.userPicker {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.userPickerLabel {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.userPickerRow {
+  display: flex;
+  gap: 6px;
+}
+
+.userPickerSelect {
+  flex: 1;
+  min-height: 34px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 0 8px;
+}
+
+.userRefreshBtn {
+  min-width: 34px;
+  min-height: 34px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+}
+
 /* ── Navigation ── */
 
 .nav {
@@ -80,6 +116,14 @@
   background: rgba(255,255,255,0.03);
   color: var(--text-secondary);
   text-decoration: none;
+}
+
+.link:focus-visible,
+.lockBtn:focus-visible,
+.userPickerSelect:focus-visible,
+.userRefreshBtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .link.active {
@@ -217,6 +261,13 @@
   }
 
   .logoSub { display: none; }
+
+  .userPicker {
+    border-bottom: none;
+    border-left: 1px solid var(--border);
+    min-width: 220px;
+    padding: 8px;
+  }
 
   .nav {
     flex-direction: row;

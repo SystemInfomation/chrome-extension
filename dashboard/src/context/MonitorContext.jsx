@@ -33,35 +33,50 @@ import {
   useEffect,
   useCallback,
   useRef,
+  useMemo,
 } from "react";
 
 /** Default backend URL — pre-configured for this deployment. */
 const DEFAULT_BACKEND_URL = "https://backend.watsons.app";
 const STORAGE_KEY = "watson_ct_backend_url";
+const SELECTED_USER_STORAGE_KEY = "watson_ct_selected_monitored_user";
 const MAX_LIVE_ENTRIES = 500;
+const DEFAULT_USER_ID = "default";
 
 const MonitorContext = createContext(null);
 
 export function MonitorProvider({ children }) {
   const [backendUrl, setBackendUrlState] = useState(DEFAULT_BACKEND_URL);
+  const [selectedMonitoredUserId, setSelectedMonitoredUserId] = useState(DEFAULT_USER_ID);
+  const [monitoredUsers, setMonitoredUsers] = useState([{ monitoredUserId: DEFAULT_USER_ID, online: false }]);
 
   // Hydrate from localStorage on mount — lets user override from Settings
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) setBackendUrlState(stored);
+    const selected = localStorage.getItem(SELECTED_USER_STORAGE_KEY);
+    if (selected) setSelectedMonitoredUserId(selected);
   }, []);
 
   const [wsStatus, setWsStatus]               = useState("disconnected");
-  const [extensionOnline, setExtOnline]        = useState(false);
-  const [liveEntries, setLiveEntries]          = useState([]);
+  const [liveStateByUser, setLiveStateByUser]  = useState(() => new Map());
   const [newAlertCount, setAlertCount]         = useState(0);
-  const [liveScreenshot, setLiveScreenshot]    = useState(null);
-  const [screenStreamActive, setStreamActive] = useState(false);
-  // Per-window screenshots: Map<windowKey, { data, focused, url, title, timestamp }>
-  const [windowScreenshots, setWindowScreenshots] = useState(new Map());
-  const [openTabs, setOpenTabs]               = useState([]);
-  const [internetBlocked, setInternetBlocked] = useState(false);
-  const [focusMode, setFocusModeState]        = useState({ enabled: false, allowedDomains: [] });
+
+  const getUserState = useCallback((userId) => {
+    const key = userId || DEFAULT_USER_ID;
+    return liveStateByUser.get(key) || {
+      extensionOnline: false,
+      liveEntries: [],
+      liveScreenshot: null,
+      screenStreamActive: false,
+      windowScreenshots: new Map(),
+      openTabs: [],
+      internetBlocked: false,
+      focusMode: { enabled: false, allowedDomains: [] },
+    };
+  }, [liveStateByUser]);
+
+  const selectedUserState = getUserState(selectedMonitoredUserId);
 
   const wsRef        = useRef(null);
   const reconnectRef = useRef(null);
@@ -79,7 +94,7 @@ export function MonitorProvider({ children }) {
       backendUrl
         .replace(/^https:/, "wss:")
         .replace(/^http:/, "ws:")
-        .replace(/\/+$/, "") + "/ws?role=dashboard";
+        .replace(/\/+$/, "") + `/ws?role=dashboard&monitoredUserId=${encodeURIComponent(selectedMonitoredUserId)}`;
 
     if (mountedRef.current) setWsStatus("connecting");
 
@@ -90,36 +105,48 @@ export function MonitorProvider({ children }) {
       if (!mountedRef.current) return;
       setWsStatus("connected");
       backoffRef.current = 1000;
-      // Request current internet block status from extension
-      ws.send(JSON.stringify({ type: "get_internet_status" }));
-      // Request current focus mode status from extension
-      ws.send(JSON.stringify({ type: "get_focus_mode" }));
+      ws.send(JSON.stringify({ type: "get_internet_status", monitoredUserId: selectedMonitoredUserId }));
+      ws.send(JSON.stringify({ type: "get_focus_mode", monitoredUserId: selectedMonitoredUserId }));
     };
 
     ws.onmessage = (event) => {
       if (!mountedRef.current) return;
       let msg;
       try { msg = JSON.parse(event.data); } catch { return; }
+      const userId = msg.monitoredUserId || selectedMonitoredUserId || DEFAULT_USER_ID;
 
       if (msg.type === "activity" && msg.entry) {
-        setLiveEntries((prev) => {
-          const next = [msg.entry, ...prev];
-          return next.length > MAX_LIVE_ENTRIES ? next.slice(0, MAX_LIVE_ENTRIES) : next;
+        setLiveStateByUser((prev) => {
+          const next = new Map(prev);
+          const current = getUserState(userId);
+          const liveEntries = [msg.entry, ...current.liveEntries];
+          next.set(userId, { ...current, liveEntries: liveEntries.slice(0, MAX_LIVE_ENTRIES) });
+          return next;
         });
-        if (msg.entry.action === "blocked") {
+        if (msg.entry.action === "blocked" && userId === selectedMonitoredUserId) {
           setAlertCount((n) => n + 1);
         }
       } else if (msg.type === "history" && Array.isArray(msg.entries)) {
-        setLiveEntries((prev) => {
-          if (prev.length > 0) return prev; // already have live data — don't overwrite
-          return msg.entries.slice(0, MAX_LIVE_ENTRIES);
+        setLiveStateByUser((prev) => {
+          const next = new Map(prev);
+          const current = getUserState(userId);
+          if (current.liveEntries.length > 0) return prev;
+          next.set(userId, { ...current, liveEntries: msg.entries.slice(0, MAX_LIVE_ENTRIES) });
+          return next;
         });
       } else if (msg.type === "status") {
-        setExtOnline(msg.status === "online");
-        // Monitoring and screen stream are always on when extension is online
-        if (msg.status === "online") {
-          setStreamActive(true);
-        }
+        const online = msg.status === "online";
+        setMonitoredUsers((prev) => {
+          const map = new Map(prev.map((u) => [u.monitoredUserId, u]));
+          map.set(userId, { monitoredUserId: userId, online });
+          return [...map.values()].sort((a, b) => a.monitoredUserId.localeCompare(b.monitoredUserId));
+        });
+        setLiveStateByUser((prev) => {
+          const next = new Map(prev);
+          const current = getUserState(userId);
+          next.set(userId, { ...current, extensionOnline: online, screenStreamActive: online ? true : current.screenStreamActive });
+          return next;
+        });
       } else if (msg.type === "screenshot" && msg.data) {
         const key = msg.windowId != null ? String(msg.windowId) : "default";
         const entry = {
@@ -129,41 +156,74 @@ export function MonitorProvider({ children }) {
           title: msg.title || "",
           timestamp: msg.timestamp || Date.now(),
         };
-        setWindowScreenshots((prev) => {
+        setLiveStateByUser((prev) => {
           const next = new Map(prev);
-          next.set(key, entry);
+          const current = getUserState(userId);
+          const windowScreenshots = new Map(current.windowScreenshots);
+          windowScreenshots.set(key, entry);
+          const nextState = {
+            ...current,
+            windowScreenshots,
+            liveScreenshot: entry.focused || msg.windowId == null ? msg.data : current.liveScreenshot,
+            screenStreamActive: true,
+          };
+          next.set(userId, nextState);
           return next;
         });
-        // Keep liveScreenshot pointing at the focused/active window for backward compat
-        if (entry.focused || msg.windowId == null) {
-          setLiveScreenshot(msg.data);
-        }
-        setStreamActive(true);
       } else if (msg.type === "screen_stream_stopped") {
-        setStreamActive(false);
-        setLiveScreenshot(null);
-        setWindowScreenshots(new Map());
+        setLiveStateByUser((prev) => {
+          const next = new Map(prev);
+          const current = getUserState(userId);
+          next.set(userId, { ...current, screenStreamActive: false, liveScreenshot: null, windowScreenshots: new Map() });
+          return next;
+        });
       } else if (msg.type === "open_tabs" && Array.isArray(msg.tabs)) {
-        setOpenTabs(msg.tabs);
+        setLiveStateByUser((prev) => {
+          const next = new Map(prev);
+          const current = getUserState(userId);
+          next.set(userId, { ...current, openTabs: msg.tabs });
+          return next;
+        });
       } else if (msg.type === "internet_status") {
-        setInternetBlocked(msg.blocked === true);
+        setLiveStateByUser((prev) => {
+          const next = new Map(prev);
+          const current = getUserState(userId);
+          next.set(userId, { ...current, internetBlocked: msg.blocked === true });
+          return next;
+        });
       } else if (msg.type === "focus_mode_status") {
-        setFocusModeState({
-          enabled: msg.enabled === true,
-          allowedDomains: Array.isArray(msg.allowedDomains) ? msg.allowedDomains : [],
+        setLiveStateByUser((prev) => {
+          const next = new Map(prev);
+          const current = getUserState(userId);
+          next.set(userId, {
+            ...current,
+            focusMode: {
+              enabled: msg.enabled === true,
+              allowedDomains: Array.isArray(msg.allowedDomains) ? msg.allowedDomains : [],
+            },
+          });
+          return next;
         });
       } else if (msg.type === "db_reset") {
-        // Server performed its daily reset — clear in-memory live feed and alerts
-        setLiveEntries([]);
+        setLiveStateByUser((prev) => {
+          const next = new Map(prev);
+          const current = getUserState(userId);
+          next.set(userId, { ...current, liveEntries: [] });
+          return next;
+        });
         setAlertCount(0);
+      } else if (msg.type === "identity") {
+        setMonitoredUsers((prev) => {
+          const map = new Map(prev.map((u) => [u.monitoredUserId, u]));
+          map.set(userId, { monitoredUserId: userId, online: true, email: msg.email || "" });
+          return [...map.values()].sort((a, b) => a.monitoredUserId.localeCompare(b.monitoredUserId));
+        });
       }
     };
 
     ws.onclose = () => {
       if (!mountedRef.current) return;
       setWsStatus("disconnected");
-      setStreamActive(false);
-      setWindowScreenshots(new Map());
       wsRef.current = null;
       const delay = Math.min(backoffRef.current, 30_000);
       backoffRef.current = Math.min(delay * 2, 30_000);
@@ -172,7 +232,7 @@ export function MonitorProvider({ children }) {
     };
 
     ws.onerror = () => { ws.close(); };
-  }, [backendUrl]);
+  }, [backendUrl, getUserState, selectedMonitoredUserId]);
 
   // Keep ref in sync with the latest connect fn (inside effect, not during render)
   useEffect(() => {
@@ -189,6 +249,28 @@ export function MonitorProvider({ children }) {
     };
   }, [connect]);
 
+  const refreshMonitoredUsers = useCallback(async () => {
+    if (!backendUrl) return;
+    try {
+      const res = await fetch(`${backendUrl}/api/monitored-users`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data.users) && data.users.length > 0) {
+        setMonitoredUsers(data.users);
+        setSelectedMonitoredUserId((prev) => {
+          const exists = data.users.some((u) => u.monitoredUserId === prev);
+          return exists ? prev : data.users[0].monitoredUserId;
+        });
+      }
+    } catch {
+      // no-op
+    }
+  }, [backendUrl]);
+
+  useEffect(() => {
+    refreshMonitoredUsers();
+  }, [refreshMonitoredUsers]);
+
   // ── Backend URL change ──────────────────────────────────────────────────
 
   const setBackendUrl = useCallback((url) => {
@@ -199,42 +281,72 @@ export function MonitorProvider({ children }) {
     backoffRef.current = 1000;
   }, []);
 
+  const setSelectedUser = useCallback((userId) => {
+    const normalized = userId || DEFAULT_USER_ID;
+    localStorage.setItem(SELECTED_USER_STORAGE_KEY, normalized);
+    setSelectedMonitoredUserId(normalized);
+    setAlertCount(0);
+  }, []);
+
   const clearAlerts = useCallback(() => setAlertCount(0), []);
-  const clearLiveEntries = useCallback(() => setLiveEntries([]), []);
+  const clearLiveEntries = useCallback(() => {
+    setLiveStateByUser((prev) => {
+      const next = new Map(prev);
+      const current = getUserState(selectedMonitoredUserId);
+      next.set(selectedMonitoredUserId, { ...current, liveEntries: [] });
+      return next;
+    });
+  }, [getUserState, selectedMonitoredUserId]);
 
   // ── Screen stream controls ──────────────────────────────────────────────
 
   const startScreenStream = useCallback(() => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({ type: "start_screen_stream" }));
-    setStreamActive(true);
-    setLiveScreenshot(null);
-  }, []);
+    wsRef.current.send(JSON.stringify({ type: "start_screen_stream", monitoredUserId: selectedMonitoredUserId }));
+    setLiveStateByUser((prev) => {
+      const next = new Map(prev);
+      const current = getUserState(selectedMonitoredUserId);
+      next.set(selectedMonitoredUserId, { ...current, screenStreamActive: true, liveScreenshot: null });
+      return next;
+    });
+  }, [getUserState, selectedMonitoredUserId]);
 
   const stopScreenStream = useCallback(() => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: "stop_screen_stream" }));
+      wsRef.current.send(JSON.stringify({ type: "stop_screen_stream", monitoredUserId: selectedMonitoredUserId }));
     }
-    setStreamActive(false);
-    setLiveScreenshot(null);
-    setWindowScreenshots(new Map());
-  }, []);
+    setLiveStateByUser((prev) => {
+      const next = new Map(prev);
+      const current = getUserState(selectedMonitoredUserId);
+      next.set(selectedMonitoredUserId, { ...current, screenStreamActive: false, liveScreenshot: null, windowScreenshots: new Map() });
+      return next;
+    });
+  }, [getUserState, selectedMonitoredUserId]);
 
   const toggleInternetBlock = useCallback(() => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    const newState = !internetBlocked;
-    wsRef.current.send(JSON.stringify({ type: "set_internet_blocked", blocked: newState }));
-    setInternetBlocked(newState); // optimistic update
-  }, [internetBlocked]);
+    const newState = !selectedUserState.internetBlocked;
+    wsRef.current.send(JSON.stringify({ type: "set_internet_blocked", monitoredUserId: selectedMonitoredUserId, blocked: newState }));
+    setLiveStateByUser((prev) => {
+      const next = new Map(prev);
+      const current = getUserState(selectedMonitoredUserId);
+      next.set(selectedMonitoredUserId, { ...current, internetBlocked: newState });
+      return next;
+    });
+  }, [getUserState, selectedMonitoredUserId, selectedUserState.internetBlocked]);
 
   // ── Tab management ──────────────────────────────────────────────────────
 
   const closeTab = useCallback((tabId) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({ type: "close_tab", tabId }));
-    // Optimistic removal
-    setOpenTabs((prev) => prev.filter((t) => t.id !== tabId));
-  }, []);
+    wsRef.current.send(JSON.stringify({ type: "close_tab", monitoredUserId: selectedMonitoredUserId, tabId }));
+    setLiveStateByUser((prev) => {
+      const next = new Map(prev);
+      const current = getUserState(selectedMonitoredUserId);
+      next.set(selectedMonitoredUserId, { ...current, openTabs: current.openTabs.filter((t) => t.id !== tabId) });
+      return next;
+    });
+  }, [getUserState, selectedMonitoredUserId]);
 
   // ── Focus Mode controls ─────────────────────────────────────────────────
 
@@ -242,46 +354,80 @@ export function MonitorProvider({ children }) {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     wsRef.current.send(JSON.stringify({
       type: "set_focus_mode",
+      monitoredUserId: selectedMonitoredUserId,
       enabled,
       allowedDomains: allowedDomains || [],
     }));
-    setFocusModeState({ enabled, allowedDomains: allowedDomains || [] }); // optimistic
-  }, []);
+    setLiveStateByUser((prev) => {
+      const next = new Map(prev);
+      const current = getUserState(selectedMonitoredUserId);
+      next.set(selectedMonitoredUserId, { ...current, focusMode: { enabled, allowedDomains: allowedDomains || [] } });
+      return next;
+    });
+  }, [getUserState, selectedMonitoredUserId]);
 
   const updateFocusDomains = useCallback((allowedDomains) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
     wsRef.current.send(JSON.stringify({
       type: "update_focus_domains",
+      monitoredUserId: selectedMonitoredUserId,
       allowedDomains,
     }));
-    setFocusModeState((prev) => ({ ...prev, allowedDomains })); // optimistic
-  }, []);
+    setLiveStateByUser((prev) => {
+      const next = new Map(prev);
+      const current = getUserState(selectedMonitoredUserId);
+      next.set(selectedMonitoredUserId, { ...current, focusMode: { ...current.focusMode, allowedDomains } });
+      return next;
+    });
+  }, [getUserState, selectedMonitoredUserId]);
+
+  const contextValue = useMemo(() => ({
+    wsStatus,
+    extensionOnline: selectedUserState.extensionOnline,
+    liveEntries: selectedUserState.liveEntries,
+    newAlertCount,
+    clearAlerts,
+    clearLiveEntries,
+    backendUrl,
+    setBackendUrl,
+    liveScreenshot: selectedUserState.liveScreenshot,
+    screenStreamActive: selectedUserState.screenStreamActive,
+    startScreenStream,
+    stopScreenStream,
+    windowScreenshots: selectedUserState.windowScreenshots,
+    openTabs: selectedUserState.openTabs,
+    closeTab,
+    internetBlocked: selectedUserState.internetBlocked,
+    toggleInternetBlock,
+    focusMode: selectedUserState.focusMode,
+    setFocusMode,
+    updateFocusDomains,
+    monitoredUsers,
+    selectedMonitoredUserId,
+    setSelectedMonitoredUserId: setSelectedUser,
+    refreshMonitoredUsers,
+  }), [
+    wsStatus,
+    selectedUserState,
+    newAlertCount,
+    clearAlerts,
+    clearLiveEntries,
+    backendUrl,
+    setBackendUrl,
+    startScreenStream,
+    stopScreenStream,
+    closeTab,
+    toggleInternetBlock,
+    setFocusMode,
+    updateFocusDomains,
+    monitoredUsers,
+    selectedMonitoredUserId,
+    setSelectedUser,
+    refreshMonitoredUsers,
+  ]);
 
   return (
-    <MonitorContext.Provider
-      value={{
-        wsStatus,
-        extensionOnline,
-        liveEntries,
-        newAlertCount,
-        clearAlerts,
-        clearLiveEntries,
-        backendUrl,
-        setBackendUrl,
-        liveScreenshot,
-        screenStreamActive,
-        startScreenStream,
-        stopScreenStream,
-        windowScreenshots,
-        openTabs,
-        closeTab,
-        internetBlocked,
-        toggleInternetBlock,
-        focusMode,
-        setFocusMode,
-        updateFocusDomains,
-      }}
-    >
+    <MonitorContext.Provider value={contextValue}>
       {children}
     </MonitorContext.Provider>
   );

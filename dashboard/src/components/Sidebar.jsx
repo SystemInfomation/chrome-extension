@@ -18,7 +18,16 @@ const NAV = [
 
 export default function Sidebar() {
   const pathname                                                    = usePathname();
-  const { wsStatus, extensionOnline, newAlertCount, openTabs }    = useMonitor();
+  const {
+    wsStatus,
+    extensionOnline,
+    newAlertCount,
+    openTabs,
+    monitoredUsers,
+    selectedMonitoredUserId,
+    setSelectedMonitoredUserId,
+    refreshMonitoredUsers,
+  } = useMonitor();
   const { lock }                                                    = usePinAuth();
 
   const statusColor =
@@ -45,6 +54,34 @@ export default function Sidebar() {
         </div>
       </div>
 
+      <div className={styles.userPicker}>
+        <label htmlFor="monitored-user-select" className={styles.userPickerLabel}>
+          Monitored user
+        </label>
+        <div className={styles.userPickerRow}>
+          <select
+            id="monitored-user-select"
+            className={styles.userPickerSelect}
+            value={selectedMonitoredUserId}
+            onChange={(e) => setSelectedMonitoredUserId(e.target.value)}
+          >
+            {monitoredUsers.map((user) => (
+              <option key={user.monitoredUserId} value={user.monitoredUserId}>
+                {user.monitoredUserId} {user.online ? "(online)" : "(offline)"}
+              </option>
+            ))}
+          </select>
+          <button
+            className={styles.userRefreshBtn}
+            onClick={refreshMonitoredUsers}
+            aria-label="Refresh monitored users"
+            title="Refresh users"
+          >
+            ↻
+          </button>
+        </div>
+      </div>
+
       {/* Navigation */}
       <nav className={styles.nav}>
         {NAV.map(({ href, label, Icon }) => {
@@ -54,6 +91,7 @@ export default function Sidebar() {
               key={href}
               href={href}
               className={`${styles.link} ${active ? styles.active : ""}`}
+              aria-label={label}
             >
               <span className={styles.linkIcon}>
                 <Icon size={16} strokeWidth={2} />
@@ -81,7 +119,7 @@ export default function Sidebar() {
           style={{ background: statusColor }}
         />
         <span className={styles.statusLabel}>{statusLabel}</span>
-        <button className={styles.lockBtn} onClick={lock} title="Lock dashboard">
+        <button className={styles.lockBtn} onClick={lock} title="Lock dashboard" aria-label="Lock dashboard">
           <Lock size={13} strokeWidth={2} />
         </button>
       </div>

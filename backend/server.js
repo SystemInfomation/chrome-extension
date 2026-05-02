@@ -15,7 +15,7 @@
  *  - A small in-memory ring buffer (MAX_HISTORY_ENTRIES) is kept solely for
  *    sending recent history to newly-connected dashboard clients over WebSocket.
  *
- * No authentication — this is a private, single-family deployment.
+ * No authentication — this is a private household deployment.
  */
 
 "use strict";
@@ -85,11 +85,14 @@ async function initDb() {
         action    TEXT        NOT NULL CHECK (action IN ('visit', 'blocked')),
         reason    TEXT,
         timestamp BIGINT      NOT NULL,
-        domain    TEXT        NOT NULL DEFAULT ''
+        domain    TEXT        NOT NULL DEFAULT '',
+        monitored_user_id TEXT NOT NULL DEFAULT 'default'
       );
+      ALTER TABLE activity ADD COLUMN IF NOT EXISTS monitored_user_id TEXT NOT NULL DEFAULT 'default';
       CREATE INDEX IF NOT EXISTS activity_timestamp_idx ON activity (timestamp DESC);
       CREATE INDEX IF NOT EXISTS activity_action_idx    ON activity (action);
       CREATE INDEX IF NOT EXISTS activity_domain_idx    ON activity (domain);
+      CREATE INDEX IF NOT EXISTS activity_user_timestamp_idx ON activity (monitored_user_id, timestamp DESC);
 
       CREATE TABLE IF NOT EXISTS alerts (
         id        TEXT PRIMARY KEY,
@@ -97,13 +100,19 @@ async function initDb() {
         domain    TEXT   NOT NULL DEFAULT '',
         reason    TEXT   NOT NULL DEFAULT 'Blocked',
         timestamp BIGINT NOT NULL,
-        severity  TEXT   NOT NULL DEFAULT 'low'
+        severity  TEXT   NOT NULL DEFAULT 'low',
+        monitored_user_id TEXT NOT NULL DEFAULT 'default'
       );
+      ALTER TABLE alerts ADD COLUMN IF NOT EXISTS monitored_user_id TEXT NOT NULL DEFAULT 'default';
       CREATE INDEX IF NOT EXISTS alerts_timestamp_idx ON alerts (timestamp DESC);
+      CREATE INDEX IF NOT EXISTS alerts_user_timestamp_idx ON alerts (monitored_user_id, timestamp DESC);
 
       CREATE TABLE IF NOT EXISTS custom_filters (
-        domain TEXT PRIMARY KEY
+        monitored_user_id TEXT NOT NULL DEFAULT 'default',
+        domain TEXT NOT NULL
       );
+      ALTER TABLE custom_filters ADD COLUMN IF NOT EXISTS monitored_user_id TEXT NOT NULL DEFAULT 'default';
+      CREATE UNIQUE INDEX IF NOT EXISTS custom_filters_user_domain_idx ON custom_filters (monitored_user_id, domain);
     `);
     console.log("[WatsonCT DB] Schema ready.");
   } catch (err) {
@@ -116,22 +125,19 @@ async function initDb() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * @typedef {{ id: string, url: string, title: string, action: "visit"|"blocked", reason: string|null, timestamp: number, domain: string }} ActivityEntry
- * @typedef {{ id: string, url: string, domain: string, reason: string, timestamp: number, severity: string }} AlertEntry
+ * @typedef {{ id: string, url: string, title: string, action: "visit"|"blocked", reason: string|null, timestamp: number, domain: string, monitoredUserId: string }} ActivityEntry
+ * @typedef {{ id: string, url: string, domain: string, reason: string, timestamp: number, severity: string, monitoredUserId: string }} AlertEntry
  */
 
-/** @type {ActivityEntry[]} — newest entries at the end, capped at MAX_HISTORY_ENTRIES */
-const recentActivity = [];
+/** @type {Map<string, ActivityEntry[]>} — newest entries at end per monitored user */
+const recentActivityByUser = new Map();
 
-/** @type {AlertEntry[]} — newest alerts at the end, capped at MAX_ALERT_SIZE */
-const recentAlerts = [];
+/** @type {Map<string, AlertEntry[]>} — newest alerts at end per monitored user */
+const recentAlertsByUser = new Map();
 const MAX_ALERT_SIZE = 500;
 
-/** @type {Set<string>} Custom blocked domains (managed via API) */
-let customFilters = new Set();
-
-/** Whether the extension is currently connected. */
-let extensionConnected = false;
+/** @type {Map<string, Set<string>>} Custom blocked domains by monitored user */
+const customFiltersByUser = new Map();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -139,6 +145,30 @@ let extensionConnected = false;
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function normalizeMonitoredUserId(rawId) {
+  if (typeof rawId !== "string") return "default";
+  const normalized = rawId.trim().toLowerCase();
+  return normalized || "default";
+}
+
+function getRecentActivityForUser(monitoredUserId) {
+  const key = normalizeMonitoredUserId(monitoredUserId);
+  if (!recentActivityByUser.has(key)) recentActivityByUser.set(key, []);
+  return recentActivityByUser.get(key);
+}
+
+function getRecentAlertsForUser(monitoredUserId) {
+  const key = normalizeMonitoredUserId(monitoredUserId);
+  if (!recentAlertsByUser.has(key)) recentAlertsByUser.set(key, []);
+  return recentAlertsByUser.get(key);
+}
+
+function getFiltersForUser(monitoredUserId) {
+  const key = normalizeMonitoredUserId(monitoredUserId);
+  if (!customFiltersByUser.has(key)) customFiltersByUser.set(key, new Set());
+  return customFiltersByUser.get(key);
 }
 
 function extractDomain(url) {
@@ -172,9 +202,10 @@ function getSeverity(reason) {
  * @param {ActivityEntry} entry
  */
 function pushRecent(entry) {
-  recentActivity.push(entry);
-  if (recentActivity.length > MAX_HISTORY_ENTRIES) {
-    recentActivity.shift();
+  const bucket = getRecentActivityForUser(entry.monitoredUserId);
+  bucket.push(entry);
+  if (bucket.length > MAX_HISTORY_ENTRIES) {
+    bucket.shift();
   }
 }
 
@@ -183,9 +214,10 @@ function pushRecent(entry) {
  * @param {AlertEntry} alert
  */
 function pushRecentAlert(alert) {
-  recentAlerts.push(alert);
-  if (recentAlerts.length > MAX_ALERT_SIZE) {
-    recentAlerts.shift();
+  const bucket = getRecentAlertsForUser(alert.monitoredUserId);
+  bucket.push(alert);
+  if (bucket.length > MAX_ALERT_SIZE) {
+    bucket.shift();
   }
 }
 
@@ -197,10 +229,10 @@ function pushRecentAlert(alert) {
 function dbInsertActivity(entry) {
   if (!db) return;
   db.query(
-    `INSERT INTO activity (id, url, title, action, reason, timestamp, domain)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO activity (id, url, title, action, reason, timestamp, domain, monitored_user_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (id) DO NOTHING`,
-    [entry.id, entry.url, entry.title, entry.action, entry.reason, entry.timestamp, entry.domain]
+    [entry.id, entry.url, entry.title, entry.action, entry.reason, entry.timestamp, entry.domain, entry.monitoredUserId]
   ).catch((err) => console.error("[WatsonCT DB] insert activity:", err.message));
 }
 
@@ -208,10 +240,10 @@ function dbInsertActivity(entry) {
 function dbInsertAlert(alert) {
   if (!db) return;
   db.query(
-    `INSERT INTO alerts (id, url, domain, reason, timestamp, severity)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO alerts (id, url, domain, reason, timestamp, severity, monitored_user_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (id) DO NOTHING`,
-    [alert.id, alert.url, alert.domain, alert.reason, alert.timestamp, alert.severity]
+    [alert.id, alert.url, alert.domain, alert.reason, alert.timestamp, alert.severity, alert.monitoredUserId]
   ).catch((err) => console.error("[WatsonCT DB] insert alert:", err.message));
 }
 
@@ -221,29 +253,32 @@ function dbInsertAlert(alert) {
 async function loadFiltersFromDb() {
   if (!db) return;
   try {
-    const { rows } = await db.query("SELECT domain FROM custom_filters");
-    customFilters = new Set(rows.map((r) => r.domain));
-    console.log(`[WatsonCT DB] Loaded ${customFilters.size} custom filters.`);
+    const { rows } = await db.query("SELECT monitored_user_id, domain FROM custom_filters");
+    customFiltersByUser.clear();
+    for (const row of rows) {
+      getFiltersForUser(row.monitored_user_id).add(row.domain);
+    }
+    console.log(`[WatsonCT DB] Loaded ${rows.length} custom filters across ${customFiltersByUser.size} monitored users.`);
   } catch (err) {
     console.error("[WatsonCT DB] load filters:", err.message);
   }
 }
 
 /** Persist a filter addition to the database (fire-and-forget). */
-function dbAddFilter(domain) {
+function dbAddFilter(monitoredUserId, domain) {
   if (!db) return;
   db.query(
-    "INSERT INTO custom_filters (domain) VALUES ($1) ON CONFLICT DO NOTHING",
-    [domain]
+    "INSERT INTO custom_filters (monitored_user_id, domain) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+    [normalizeMonitoredUserId(monitoredUserId), domain]
   ).catch((err) => console.error("[WatsonCT DB] add filter:", err.message));
 }
 
 /** Persist a filter removal to the database (fire-and-forget). */
-function dbRemoveFilter(domain) {
+function dbRemoveFilter(monitoredUserId, domain) {
   if (!db) return;
   db.query(
-    "DELETE FROM custom_filters WHERE domain = $1",
-    [domain]
+    "DELETE FROM custom_filters WHERE monitored_user_id = $1 AND domain = $2",
+    [normalizeMonitoredUserId(monitoredUserId), domain]
   ).catch((err) => console.error("[WatsonCT DB] remove filter:", err.message));
 }
 
@@ -261,8 +296,8 @@ async function resetDailyData() {
   console.log("[WatsonCT] Daily reset — clearing activity and alerts.");
 
   // Clear in-memory buffers immediately so live clients see the clean state
-  recentActivity.length = 0;
-  recentAlerts.length   = 0;
+  recentActivityByUser.clear();
+  recentAlertsByUser.clear();
 
   if (db) {
     try {
@@ -369,11 +404,53 @@ app.use(express.json({ limit: "1mb" }));
 
 // ─── GET /api/status ─────────────────────────────────────────────────────────
 app.get("/api/status", (_req, res) => {
+  const monitoredUserId = normalizeMonitoredUserId(_req.query.monitoredUserId);
+  const extensionConnected = [...clients.values()].some(
+    (m) => m.role === "extension" && m.monitoredUserId === monitoredUserId
+  );
   res.json({
+    monitoredUserId,
     extensionConnected,
     uptime: process.uptime(),
     dbConnected: db !== null,
   });
+});
+
+app.get("/api/monitored-users", async (_req, res) => {
+  const connected = new Set(
+    [...clients.values()]
+      .filter((m) => m.role === "extension")
+      .map((m) => m.monitoredUserId)
+  );
+
+  const users = new Map();
+  for (const monitoredUserId of connected) {
+    users.set(monitoredUserId, { monitoredUserId, online: true });
+  }
+
+  if (db) {
+    try {
+      const { rows } = await db.query(`
+        SELECT monitored_user_id FROM activity
+        UNION
+        SELECT monitored_user_id FROM alerts
+        UNION
+        SELECT monitored_user_id FROM custom_filters
+      `);
+      for (const row of rows) {
+        const id = normalizeMonitoredUserId(row.monitored_user_id);
+        if (!users.has(id)) users.set(id, { monitoredUserId: id, online: connected.has(id) });
+      }
+    } catch (err) {
+      console.error("[WatsonCT DB] GET /api/monitored-users:", err.message);
+    }
+  }
+
+  if (users.size === 0) {
+    users.set("default", { monitoredUserId: "default", online: false });
+  }
+
+  res.json({ users: [...users.values()].sort((a, b) => a.monitoredUserId.localeCompare(b.monitoredUserId)) });
 });
 
 // ─── GET /api/activity ───────────────────────────────────────────────────────
@@ -386,7 +463,9 @@ app.get("/api/activity", rateLimitMiddleware, async (req, res) => {
     search,
     from,
     to,
+    monitoredUserId: monitoredUserIdParam,
   } = req.query;
+  const monitoredUserId = normalizeMonitoredUserId(monitoredUserIdParam);
 
   const pageNum  = Math.max(1, parseInt(page, 10)  || 1);
   const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
@@ -399,6 +478,7 @@ app.get("/api/activity", rateLimitMiddleware, async (req, res) => {
       const params     = [];
       let   p          = 1;
 
+      conditions.push(`monitored_user_id = $${p++}`); params.push(monitoredUserId);
       if (action === "blocked" || action === "visit") {
         conditions.push(`action = $${p++}`); params.push(action);
       }
@@ -422,7 +502,7 @@ app.get("/api/activity", rateLimitMiddleware, async (req, res) => {
       const [countRes, rowsRes] = await Promise.all([
         db.query(`SELECT COUNT(*) AS cnt FROM activity ${where}`, params),
         db.query(
-          `SELECT id, url, title, action, reason, timestamp, domain
+          `SELECT id, url, title, action, reason, timestamp, domain, monitored_user_id
              FROM activity ${where}
             ORDER BY timestamp DESC
             LIMIT $${p} OFFSET $${p + 1}`,
@@ -434,7 +514,11 @@ app.get("/api/activity", rateLimitMiddleware, async (req, res) => {
         total: parseInt(countRes.rows[0].cnt, 10),
         page:  pageNum,
         limit: limitNum,
-        items: rowsRes.rows.map((r) => ({ ...r, timestamp: Number(r.timestamp) })),
+        items: rowsRes.rows.map((r) => ({
+          ...r,
+          timestamp: Number(r.timestamp),
+          monitoredUserId: r.monitored_user_id,
+        })),
       });
     } catch (err) {
       console.error("[WatsonCT DB] GET /api/activity:", err.message);
@@ -443,7 +527,7 @@ app.get("/api/activity", rateLimitMiddleware, async (req, res) => {
   }
 
   // ── In-memory fallback (no DB configured) ───────────────────────────────
-  let filtered = recentActivity.slice().reverse();
+  let filtered = getRecentActivityForUser(monitoredUserId).slice().reverse();
 
   if (action === "blocked" || action === "visit") {
     filtered = filtered.filter((e) => e.action === action);
@@ -474,6 +558,7 @@ app.get("/api/activity", rateLimitMiddleware, async (req, res) => {
 
 // ─── GET /api/activity/stats ──────────────────────────────────────────────────
 app.get("/api/activity/stats", rateLimitMiddleware, async (_req, res) => {
+  const monitoredUserId = normalizeMonitoredUserId(_req.query.monitoredUserId);
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const todayTs = todayStart.getTime();
@@ -481,16 +566,16 @@ app.get("/api/activity/stats", rateLimitMiddleware, async (_req, res) => {
   if (db) {
     try {
       const [totRes, blkRes, domRes] = await Promise.all([
-        db.query("SELECT COUNT(*) AS cnt FROM activity WHERE timestamp >= $1", [todayTs]),
-        db.query("SELECT COUNT(*) AS cnt FROM activity WHERE timestamp >= $1 AND action = 'blocked'", [todayTs]),
+        db.query("SELECT COUNT(*) AS cnt FROM activity WHERE monitored_user_id = $1 AND timestamp >= $2", [monitoredUserId, todayTs]),
+        db.query("SELECT COUNT(*) AS cnt FROM activity WHERE monitored_user_id = $1 AND timestamp >= $2 AND action = 'blocked'", [monitoredUserId, todayTs]),
         db.query(
           `SELECT domain, COUNT(*) AS cnt
              FROM activity
-            WHERE timestamp >= $1
+            WHERE monitored_user_id = $1 AND timestamp >= $2
             GROUP BY domain
             ORDER BY cnt DESC
             LIMIT 10`,
-          [todayTs]
+          [monitoredUserId, todayTs]
         ),
       ]);
 
@@ -506,7 +591,7 @@ app.get("/api/activity/stats", rateLimitMiddleware, async (_req, res) => {
   }
 
   // Fallback
-  const todayEntries = recentActivity.filter((e) => e.timestamp >= todayTs);
+  const todayEntries = getRecentActivityForUser(monitoredUserId).filter((e) => e.timestamp >= todayTs);
   const totalToday   = todayEntries.length;
   const blockedToday = todayEntries.filter((e) => e.action === "blocked").length;
   const domainCounts = {};
@@ -523,7 +608,8 @@ app.get("/api/activity/stats", rateLimitMiddleware, async (_req, res) => {
 
 // ─── GET /api/alerts ─────────────────────────────────────────────────────────
 app.get("/api/alerts", rateLimitMiddleware, async (req, res) => {
-  const { page = "1", limit = "50" } = req.query;
+  const { page = "1", limit = "50", monitoredUserId: monitoredUserIdParam } = req.query;
+  const monitoredUserId = normalizeMonitoredUserId(monitoredUserIdParam);
   const pageNum  = Math.max(1, parseInt(page, 10)  || 1);
   const limitNum = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
   const offset   = (pageNum - 1) * limitNum;
@@ -531,20 +617,25 @@ app.get("/api/alerts", rateLimitMiddleware, async (req, res) => {
   if (db) {
     try {
       const [countRes, rowsRes] = await Promise.all([
-        db.query("SELECT COUNT(*) AS cnt FROM alerts"),
+        db.query("SELECT COUNT(*) AS cnt FROM alerts WHERE monitored_user_id = $1", [monitoredUserId]),
         db.query(
-          `SELECT id, url, domain, reason, timestamp, severity
+          `SELECT id, url, domain, reason, timestamp, severity, monitored_user_id
              FROM alerts
+            WHERE monitored_user_id = $3
             ORDER BY timestamp DESC
             LIMIT $1 OFFSET $2`,
-          [limitNum, offset]
+          [limitNum, offset, monitoredUserId]
         ),
       ]);
       return res.json({
         total: parseInt(countRes.rows[0].cnt, 10),
         page:  pageNum,
         limit: limitNum,
-        items: rowsRes.rows.map((r) => ({ ...r, timestamp: Number(r.timestamp) })),
+        items: rowsRes.rows.map((r) => ({
+          ...r,
+          timestamp: Number(r.timestamp),
+          monitoredUserId: r.monitored_user_id,
+        })),
       });
     } catch (err) {
       console.error("[WatsonCT DB] GET /api/alerts:", err.message);
@@ -553,20 +644,22 @@ app.get("/api/alerts", rateLimitMiddleware, async (req, res) => {
   }
 
   // Fallback — not meaningful without DB but kept for compatibility
-  const reversed = recentAlerts.slice().reverse();
+  const reversed = getRecentAlertsForUser(monitoredUserId).slice().reverse();
   const total = reversed.length;
   const items = reversed.slice(offset, offset + limitNum);
   return res.json({ total, page: pageNum, limit: limitNum, items });
 });
 
 // ─── GET /api/filters ────────────────────────────────────────────────────────
-app.get("/api/filters", (_req, res) => {
-  res.json({ filters: Array.from(customFilters) });
+app.get("/api/filters", (req, res) => {
+  const monitoredUserId = normalizeMonitoredUserId(req.query.monitoredUserId);
+  res.json({ monitoredUserId, filters: Array.from(getFiltersForUser(monitoredUserId)) });
 });
 
 // ─── POST /api/filters ───────────────────────────────────────────────────────
 app.post("/api/filters", (req, res) => {
-  const { domain } = req.body;
+  const { domain, monitoredUserId: monitoredUserIdRaw } = req.body || {};
+  const monitoredUserId = normalizeMonitoredUserId(monitoredUserIdRaw);
   if (!domain || typeof domain !== "string") {
     return res.status(400).json({ error: "domain is required" });
   }
@@ -574,28 +667,30 @@ app.post("/api/filters", (req, res) => {
   if (!normalized || !normalized.includes(".")) {
     return res.status(400).json({ error: "invalid domain" });
   }
-  customFilters.add(normalized);
-  dbAddFilter(normalized);
+  getFiltersForUser(monitoredUserId).add(normalized);
+  dbAddFilter(monitoredUserId, normalized);
 
   // Broadcast add_filter command to connected extensions
-  broadcast({ type: "add_filter", domain: normalized }, "extension");
+  broadcast({ type: "add_filter", domain: normalized, monitoredUserId }, "extension", monitoredUserId);
 
-  res.json({ ok: true, domain: normalized, filters: Array.from(customFilters) });
+  res.json({ ok: true, monitoredUserId, domain: normalized, filters: Array.from(getFiltersForUser(monitoredUserId)) });
 });
 
 // ─── DELETE /api/filters/:domain ─────────────────────────────────────────────
 app.delete("/api/filters/:domain", (req, res) => {
+  const monitoredUserId = normalizeMonitoredUserId(req.query.monitoredUserId);
   const domain = decodeURIComponent(req.params.domain).trim().toLowerCase().replace(/^www\./, "");
-  if (!customFilters.has(domain)) {
+  const filters = getFiltersForUser(monitoredUserId);
+  if (!filters.has(domain)) {
     return res.status(404).json({ error: "domain not found" });
   }
-  customFilters.delete(domain);
-  dbRemoveFilter(domain);
+  filters.delete(domain);
+  dbRemoveFilter(monitoredUserId, domain);
 
   // Broadcast remove_filter command to connected extensions
-  broadcast({ type: "remove_filter", domain }, "extension");
+  broadcast({ type: "remove_filter", domain, monitoredUserId }, "extension", monitoredUserId);
 
-  res.json({ ok: true, domain, filters: Array.from(customFilters) });
+  res.json({ ok: true, monitoredUserId, domain, filters: Array.from(filters) });
 });
 
 // Health check
@@ -621,7 +716,7 @@ const wss    = new WebSocketServer({ server, path: "/ws", maxPayload: 5 * 1024 *
 
 /**
  * Connected clients, tagged by role.
- * @type {Map<import("ws").WebSocket, { role: "extension"|"dashboard" }>}
+ * @type {Map<import("ws").WebSocket, { role: "extension"|"dashboard", monitoredUserId: string }>}
  */
 const clients = new Map();
 
@@ -631,41 +726,46 @@ const clients = new Map();
  *
  * @param {object} payload
  * @param {"extension"|"dashboard"|undefined} targetRole
+ * @param {string|undefined} targetMonitoredUserId
  */
-function broadcast(payload, targetRole) {
+function broadcast(payload, targetRole, targetMonitoredUserId) {
   const msg = JSON.stringify(payload);
+  const normalizedUser = targetMonitoredUserId ? normalizeMonitoredUserId(targetMonitoredUserId) : undefined;
   for (const [ws, meta] of clients.entries()) {
     if (ws.readyState !== ws.OPEN) continue;
     if (targetRole && meta.role !== targetRole) continue;
+    if (normalizedUser && meta.monitoredUserId !== normalizedUser) continue;
     ws.send(msg);
   }
 }
 
 wss.on("connection", (ws, req) => {
-  // Determine client role from query string: ?role=extension or ?role=dashboard
   const url  = new URL(req.url, `http://${req.headers.host}`);
   const role = url.searchParams.get("role") === "extension" ? "extension" : "dashboard";
-  clients.set(ws, { role });
+  const monitoredUserId = normalizeMonitoredUserId(
+    url.searchParams.get("monitoredUserId")
+    || url.searchParams.get("userId")
+    || url.searchParams.get("email")
+  );
+  clients.set(ws, { role, monitoredUserId });
 
-  console.log(`[WatsonCT WS] ${role} connected (${clients.size} total)`);
+  console.log(`[WatsonCT WS] ${role}:${monitoredUserId} connected (${clients.size} total)`);
 
   if (role === "extension") {
-    extensionConnected = true;
-    // Notify dashboards that extension is online
-    broadcast({ type: "status", status: "online" }, "dashboard");
-    // Send current custom filters to extension on connect
-    if (customFilters.size > 0) {
-      ws.send(JSON.stringify({ type: "filters_sync", filters: Array.from(customFilters) }));
+    broadcast({ type: "status", status: "online", monitoredUserId }, "dashboard", monitoredUserId);
+    const filters = Array.from(getFiltersForUser(monitoredUserId));
+    if (filters.length > 0) {
+      ws.send(JSON.stringify({ type: "filters_sync", monitoredUserId, filters }));
     }
-    // Auto-start live screen stream so monitoring is always on
     ws.send(JSON.stringify({ type: "start_screen_stream" }));
   } else {
-    // Send current extension status to the newly-connected dashboard immediately
-    ws.send(JSON.stringify({ type: "status", status: extensionConnected ? "online" : "offline" }));
-    // Send recent activity history so the live feed isn't empty on load
-    const recent = recentActivity.slice().reverse(); // newest first
+    const anyExtension = [...clients.values()].some(
+      (m) => m.role === "extension" && m.monitoredUserId === monitoredUserId
+    );
+    ws.send(JSON.stringify({ type: "status", monitoredUserId, status: anyExtension ? "online" : "offline" }));
+    const recent = getRecentActivityForUser(monitoredUserId).slice().reverse();
     if (recent.length > 0) {
-      ws.send(JSON.stringify({ type: "history", entries: recent }));
+      ws.send(JSON.stringify({ type: "history", monitoredUserId, entries: recent }));
     }
   }
 
@@ -678,7 +778,7 @@ wss.on("connection", (ws, req) => {
     }
 
     if (msg.type === "activity") {
-      // Browsing activity event from the extension
+      const eventUserId = normalizeMonitoredUserId(msg.monitoredUserId || monitoredUserId);
       const entry = {
         id:        generateId(),
         url:       msg.url       || "",
@@ -687,13 +787,12 @@ wss.on("connection", (ws, req) => {
         reason:    msg.reason    || null,
         timestamp: msg.timestamp || Date.now(),
         domain:    extractDomain(msg.url || ""),
+        monitoredUserId: eventUserId,
       };
 
-      // Save to DB and keep in the in-memory ring buffer
       dbInsertActivity(entry);
       pushRecent(entry);
 
-      // If blocked, also create an alert
       if (entry.action === "blocked") {
         const alert = {
           id:        entry.id,
@@ -702,22 +801,21 @@ wss.on("connection", (ws, req) => {
           reason:    entry.reason || "Blocked",
           timestamp: entry.timestamp,
           severity:  getSeverity(entry.reason),
+          monitoredUserId: eventUserId,
         };
         dbInsertAlert(alert);
         pushRecentAlert(alert);
-        // Forward alert to dashboards
-        broadcast({ type: "alert", alert }, "dashboard");
+        broadcast({ type: "alert", monitoredUserId: eventUserId, alert }, "dashboard", eventUserId);
       }
-
-      // Forward activity to all dashboard clients in real-time
-      broadcast({ type: "activity", entry }, "dashboard");
+      broadcast({ type: "activity", monitoredUserId: eventUserId, entry }, "dashboard", eventUserId);
 
     } else if (msg.type === "screenshot") {
-      // Live screenshot from the extension — relay to all dashboards
       if (role === "extension" && msg.data) {
+        const eventUserId = normalizeMonitoredUserId(msg.monitoredUserId || monitoredUserId);
         broadcast(
           {
             type:      "screenshot",
+            monitoredUserId: eventUserId,
             data:      msg.data,
             timestamp: msg.timestamp || Date.now(),
             url:       msg.url      || "",
@@ -725,103 +823,126 @@ wss.on("connection", (ws, req) => {
             windowId:  msg.windowId ?? null,
             focused:   msg.focused  === true,
           },
-          "dashboard"
+          "dashboard",
+          eventUserId
         );
       }
 
     } else if (msg.type === "start_screen_stream") {
-      // Dashboard requesting live screen stream — forward to extension(s)
       if (role === "dashboard") {
-        broadcast({ type: "start_screen_stream" }, "extension");
+        const targetUser = normalizeMonitoredUserId(msg.monitoredUserId || monitoredUserId);
+        broadcast({ type: "start_screen_stream", monitoredUserId: targetUser }, "extension", targetUser);
       }
 
     } else if (msg.type === "stop_screen_stream") {
-      // Dashboard stopping live screen stream — forward to extension(s)
       if (role === "dashboard") {
-        broadcast({ type: "stop_screen_stream" }, "extension");
+        const targetUser = normalizeMonitoredUserId(msg.monitoredUserId || monitoredUserId);
+        broadcast({ type: "stop_screen_stream", monitoredUserId: targetUser }, "extension", targetUser);
       }
 
     } else if (msg.type === "status") {
-      // Extension heartbeat / status update
       if (role === "extension") {
-        extensionConnected = true;
-        broadcast({ type: "status", status: "online" }, "dashboard");
+        const eventUserId = normalizeMonitoredUserId(msg.monitoredUserId || monitoredUserId);
+        broadcast({ type: "status", monitoredUserId: eventUserId, status: "online" }, "dashboard", eventUserId);
       }
     } else if (msg.type === "open_tabs") {
-      // Extension reporting all open tabs — relay to dashboards
       if (role === "extension" && Array.isArray(msg.tabs)) {
-        broadcast({ type: "open_tabs", tabs: msg.tabs, timestamp: msg.timestamp || Date.now() }, "dashboard");
+        const eventUserId = normalizeMonitoredUserId(msg.monitoredUserId || monitoredUserId);
+        broadcast({ type: "open_tabs", monitoredUserId: eventUserId, tabs: msg.tabs, timestamp: msg.timestamp || Date.now() }, "dashboard", eventUserId);
       }
     } else if (msg.type === "set_internet_blocked") {
-      // Dashboard requesting to toggle internet block — forward to extension(s)
       if (role === "dashboard") {
-        broadcast({ type: "set_internet_blocked", blocked: msg.blocked === true }, "extension");
+        const targetUser = normalizeMonitoredUserId(msg.monitoredUserId || monitoredUserId);
+        broadcast({ type: "set_internet_blocked", monitoredUserId: targetUser, blocked: msg.blocked === true }, "extension", targetUser);
       }
     } else if (msg.type === "get_internet_status") {
-      // Dashboard requesting current internet block status — forward to extension(s)
       if (role === "dashboard") {
-        broadcast({ type: "get_internet_status" }, "extension");
+        const targetUser = normalizeMonitoredUserId(msg.monitoredUserId || monitoredUserId);
+        broadcast({ type: "get_internet_status", monitoredUserId: targetUser }, "extension", targetUser);
       }
     } else if (msg.type === "internet_status") {
-      // Extension reporting internet block status — forward to dashboards
       if (role === "extension") {
-        broadcast({ type: "internet_status", blocked: msg.blocked === true }, "dashboard");
+        const eventUserId = normalizeMonitoredUserId(msg.monitoredUserId || monitoredUserId);
+        broadcast({ type: "internet_status", monitoredUserId: eventUserId, blocked: msg.blocked === true }, "dashboard", eventUserId);
       }
 
-    // ── Tab management ─────────────────────────────────────────────────────
     } else if (msg.type === "close_tab") {
-      // Dashboard requesting to close a specific tab — forward to extension(s)
       if (role === "dashboard" && typeof msg.tabId === "number") {
-        broadcast({ type: "close_tab", tabId: msg.tabId }, "extension");
+        const targetUser = normalizeMonitoredUserId(msg.monitoredUserId || monitoredUserId);
+        broadcast({ type: "close_tab", monitoredUserId: targetUser, tabId: msg.tabId }, "extension", targetUser);
       }
 
-    // ── Focus Mode ─────────────────────────────────────────────────────────
     } else if (msg.type === "set_focus_mode") {
-      // Dashboard toggling focus mode — forward to extension(s)
       if (role === "dashboard") {
+        const targetUser = normalizeMonitoredUserId(msg.monitoredUserId || monitoredUserId);
         broadcast({
           type: "set_focus_mode",
+          monitoredUserId: targetUser,
           enabled: msg.enabled === true,
           allowedDomains: Array.isArray(msg.allowedDomains) ? msg.allowedDomains : [],
-        }, "extension");
+        }, "extension", targetUser);
       }
     } else if (msg.type === "update_focus_domains") {
-      // Dashboard updating focus mode allowed domains — forward to extension(s)
       if (role === "dashboard" && Array.isArray(msg.allowedDomains)) {
-        broadcast({ type: "update_focus_domains", allowedDomains: msg.allowedDomains }, "extension");
+        const targetUser = normalizeMonitoredUserId(msg.monitoredUserId || monitoredUserId);
+        broadcast({ type: "update_focus_domains", monitoredUserId: targetUser, allowedDomains: msg.allowedDomains }, "extension", targetUser);
       }
     } else if (msg.type === "get_focus_mode") {
-      // Dashboard requesting current focus mode state — forward to extension(s)
       if (role === "dashboard") {
-        broadcast({ type: "get_focus_mode" }, "extension");
+        const targetUser = normalizeMonitoredUserId(msg.monitoredUserId || monitoredUserId);
+        broadcast({ type: "get_focus_mode", monitoredUserId: targetUser }, "extension", targetUser);
       }
     } else if (msg.type === "focus_mode_status") {
-      // Extension reporting focus mode state — forward to dashboards
       if (role === "extension") {
+        const eventUserId = normalizeMonitoredUserId(msg.monitoredUserId || monitoredUserId);
         broadcast({
           type: "focus_mode_status",
+          monitoredUserId: eventUserId,
           enabled: msg.enabled === true,
           allowedDomains: Array.isArray(msg.allowedDomains) ? msg.allowedDomains : [],
-        }, "dashboard");
+        }, "dashboard", eventUserId);
+      }
+    } else if (msg.type === "identity" && role === "extension") {
+      const identityUser = normalizeMonitoredUserId(msg.monitoredUserId || msg.id || msg.email || monitoredUserId);
+      clients.set(ws, { role, monitoredUserId: identityUser });
+      broadcast(
+        {
+          type: "identity",
+          monitoredUserId: identityUser,
+          email: msg.email || "",
+          id: msg.id || "",
+          status: "online",
+        },
+        "dashboard",
+        identityUser
+      );
+      const filters = Array.from(getFiltersForUser(identityUser));
+      ws.send(JSON.stringify({ type: "filters_sync", monitoredUserId: identityUser, filters }));
+      broadcast({ type: "status", monitoredUserId: identityUser, status: "online" }, "dashboard", identityUser);
+    } else if (msg.type === "filters_sync" && role === "extension" && Array.isArray(msg.filters)) {
+      const eventUserId = normalizeMonitoredUserId(msg.monitoredUserId || monitoredUserId);
+      const next = getFiltersForUser(eventUserId);
+      next.clear();
+      for (const domain of msg.filters) {
+        if (typeof domain === "string" && domain.includes(".")) next.add(domain.trim().toLowerCase());
       }
     }
   });
 
   ws.on("close", () => {
     clients.delete(ws);
-    // Check if any extension clients remain
-    const anyExtension = [...clients.values()].some((m) => m.role === "extension");
-    if (!anyExtension && role === "extension") {
-      extensionConnected = false;
-      broadcast({ type: "status", status: "offline" }, "dashboard");
-      // Extension is gone — tell dashboards the screen stream has stopped
-      broadcast({ type: "screen_stream_stopped" }, "dashboard");
+    const anyExtensionForUser = [...clients.values()].some(
+      (m) => m.role === "extension" && m.monitoredUserId === monitoredUserId
+    );
+    if (!anyExtensionForUser && role === "extension") {
+      broadcast({ type: "status", monitoredUserId, status: "offline" }, "dashboard", monitoredUserId);
+      broadcast({ type: "screen_stream_stopped", monitoredUserId }, "dashboard", monitoredUserId);
     }
-    console.log(`[WatsonCT WS] ${role} disconnected (${clients.size} remaining)`);
+    console.log(`[WatsonCT WS] ${role}:${monitoredUserId} disconnected (${clients.size} remaining)`);
   });
 
   ws.on("error", (err) => {
-    console.error(`[WatsonCT WS] ${role} error:`, err.message);
+    console.error(`[WatsonCT WS] ${role}:${monitoredUserId} error:`, err.message);
   });
 });
 

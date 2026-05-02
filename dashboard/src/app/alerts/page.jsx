@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { AlertTriangle, ShieldOff, ChevronLeft, ChevronRight } from "lucide-react";
 import { useMonitor } from "../../context/MonitorContext";
+import { Button } from "../../components/ui/button";
 import styles from "./page.module.css";
 
 const SEVERITY_META = {
@@ -13,7 +14,7 @@ const SEVERITY_META = {
 };
 
 export default function Alerts() {
-  const { backendUrl, clearAlerts } = useMonitor();
+  const { backendUrl, clearAlerts, selectedMonitoredUserId } = useMonitor();
 
   const [items,   setItems]   = useState([]);
   const [total,   setTotal]   = useState(0);
@@ -30,7 +31,7 @@ export default function Alerts() {
     setError(null);
     try {
       if (!backendUrl) throw new Error("Backend not configured");
-      const res = await fetch(`${backendUrl}/api/alerts?page=${page}&limit=${LIMIT}`);
+      const res = await fetch(`${backendUrl}/api/alerts?page=${page}&limit=${LIMIT}&monitoredUserId=${encodeURIComponent(selectedMonitoredUserId)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setItems(data.items || []);
@@ -40,7 +41,7 @@ export default function Alerts() {
     } finally {
       setLoading(false);
     }
-  }, [backendUrl, page]);
+  }, [backendUrl, page, selectedMonitoredUserId]);
 
   useEffect(() => { fetchAlerts(); }, [fetchAlerts]);
 
@@ -113,13 +114,13 @@ export default function Alerts() {
 
           {totalPages > 1 && (
             <div className={styles.pagination}>
-              <button className={styles.pageBtn} disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+              <Button className={styles.pageBtn} disabled={page <= 1} onClick={() => setPage((p) => p - 1)} variant="secondary" size="sm">
                 <ChevronLeft size={14} /> Prev
-              </button>
+              </Button>
               <span className={styles.pageInfo}>Page {page} of {totalPages}</span>
-              <button className={styles.pageBtn} disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+              <Button className={styles.pageBtn} disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} variant="secondary" size="sm">
                 Next <ChevronRight size={14} />
-              </button>
+              </Button>
             </div>
           )}
         </>

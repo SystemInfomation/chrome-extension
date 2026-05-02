@@ -5,10 +5,12 @@ import {
   AppWindow, X, Globe, ExternalLink, Search,
 } from "lucide-react";
 import { useMonitor } from "../../context/MonitorContext";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
 import styles from "./page.module.css";
 
 export default function TabsPage() {
-  const { openTabs, closeTab, wsStatus, extensionOnline } = useMonitor();
+  const { openTabs, closeTab, wsStatus, extensionOnline, selectedMonitoredUserId } = useMonitor();
   const [search, setSearch] = useState("");
 
   const canManage = wsStatus === "connected" && extensionOnline;
@@ -43,6 +45,7 @@ export default function TabsPage() {
           <div>
             <h1 className={styles.title}>Open Tabs</h1>
             <p className={styles.subtitle}>
+              User: {selectedMonitoredUserId} ·{" "}
               {openTabs.length} tab{openTabs.length !== 1 ? "s" : ""} across{" "}
               {new Set(openTabs.map((t) => t.windowId)).size} window
               {new Set(openTabs.map((t) => t.windowId)).size !== 1 ? "s" : ""}
@@ -61,20 +64,23 @@ export default function TabsPage() {
       {/* Search */}
       <div className={styles.searchBar}>
         <Search size={14} strokeWidth={2} className={styles.searchIcon} />
-        <input
+        <Input
           className={styles.searchInput}
+          aria-label="Search tabs"
           placeholder="Search tabs…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         {search && (
-          <button
+          <Button
             className={styles.clearSearch}
             onClick={() => setSearch("")}
             title="Clear search"
+            variant="ghost"
+            size="icon"
           >
             <X size={13} strokeWidth={2} />
-          </button>
+          </Button>
         )}
       </div>
 

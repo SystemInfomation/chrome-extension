@@ -3,11 +3,15 @@
 import { useState, useEffect, useCallback } from "react";
 import { Settings, Plus, Trash2, RefreshCw, Focus, Wifi, WifiOff, Monitor, MonitorOff } from "lucide-react";
 import { useMonitor } from "../../context/MonitorContext";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { Switch } from "../../components/ui/switch";
 import styles from "./page.module.css";
 
 export default function SettingsPage() {
   const {
     wsStatus, extensionOnline, backendUrl,
+    selectedMonitoredUserId,
     focusMode, setFocusMode, updateFocusDomains,
     internetBlocked, toggleInternetBlock,
     screenStreamActive, startScreenStream, stopScreenStream,
@@ -31,7 +35,7 @@ export default function SettingsPage() {
     setFilterErr(null);
     try {
       if (!backendUrl) throw new Error("Backend not configured");
-      const res = await fetch(`${backendUrl}/api/filters`);
+      const res = await fetch(`${backendUrl}/api/filters?monitoredUserId=${encodeURIComponent(selectedMonitoredUserId)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setFilters(data.filters || []);
@@ -40,7 +44,7 @@ export default function SettingsPage() {
     } finally {
       setFilterLoad(false);
     }
-  }, [backendUrl]);
+  }, [backendUrl, selectedMonitoredUserId]);
 
   useEffect(() => { loadFilters(); }, [loadFilters]);
 
@@ -55,7 +59,7 @@ export default function SettingsPage() {
       const res = await fetch(`${backendUrl}/api/filters`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain }),
+        body: JSON.stringify({ domain, monitoredUserId: selectedMonitoredUserId }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setNewDomain("");
@@ -71,7 +75,7 @@ export default function SettingsPage() {
     setFilterErr(null);
     try {
       if (!backendUrl) throw new Error("Backend not configured");
-      const res = await fetch(`${backendUrl}/api/filters/${encodeURIComponent(domain)}`, {
+      const res = await fetch(`${backendUrl}/api/filters/${encodeURIComponent(domain)}?monitoredUserId=${encodeURIComponent(selectedMonitoredUserId)}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -91,7 +95,7 @@ export default function SettingsPage() {
           </div>
           <div>
             <h1 className={styles.title}>Settings</h1>
-            <p className={styles.subtitle}>Configure monitoring & filters</p>
+            <p className={styles.subtitle}>Configure monitoring & filters for {selectedMonitoredUserId}</p>
           </div>
         </div>
       </div>
@@ -140,20 +144,12 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-          <button
-            className={`${styles.blockToggle} ${internetBlocked ? styles.blockToggleActive : ""}`}
-            onClick={toggleInternetBlock}
+          <Switch
+            checked={internetBlocked}
+            onCheckedChange={toggleInternetBlock}
             disabled={!canControl}
-            title={
-              !canControl
-                ? "Extension must be online to toggle internet block"
-                : internetBlocked
-                  ? "Unblock internet access"
-                  : "Block all internet access"
-            }
-          >
-            <span className={styles.blockToggleKnob} />
-          </button>
+            aria-label="Toggle internet access block"
+          />
         </div>
       </section>
 
@@ -172,18 +168,17 @@ export default function SettingsPage() {
               </span>
             </div>
             {screenStreamActive ? (
-              <button className={`${styles.btn} ${styles.btnDanger}`} onClick={stopScreenStream}>
+              <Button variant="destructive" size="sm" onClick={stopScreenStream}>
                 <MonitorOff size={14} strokeWidth={2} /> Stop
-              </button>
+              </Button>
             ) : (
-              <button
-                className={`${styles.btn} ${styles.btnPrimary}`}
+              <Button
                 onClick={startScreenStream}
                 disabled={!canControl}
                 title={!canControl ? "Extension must be online to start streaming" : "Start live screen stream"}
               >
                 <Monitor size={14} strokeWidth={2} /> Start
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -199,21 +194,20 @@ export default function SettingsPage() {
         <div className={styles.card}>
             {/* Add form */}
             <form className={styles.addRow} onSubmit={addFilter}>
-              <input
-                className={styles.input}
+              <Input
+                aria-label="Add blocked domain"
                 value={newDomain}
                 onChange={(e) => setNewDomain(e.target.value)}
                 placeholder="example.com"
                 disabled={adding}
               />
-              <button
+              <Button
                 type="submit"
-                className={`${styles.btn} ${styles.btnPrimary}`}
                 disabled={adding || !newDomain.trim()}
               >
                 {adding ? <RefreshCw size={14} className={styles.spin} /> : <Plus size={14} />}
                 Add
-              </button>
+              </Button>
             </form>
 
             {filterErr && <div className={styles.filterErr}>{filterErr}</div>}
@@ -244,9 +238,9 @@ export default function SettingsPage() {
               </ul>
             )}
 
-            <button className={`${styles.btn} ${styles.btnGhost}`} onClick={loadFilters} style={{ marginTop: 12 }}>
+            <Button variant="secondary" size="sm" onClick={loadFilters} style={{ marginTop: 12 }}>
               <RefreshCw size={13} /> Refresh
-            </button>
+            </Button>
           </div>
       </section>
 
@@ -273,18 +267,12 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-          <button
-            className={`${styles.focusToggle} ${focusMode.enabled ? styles.focusToggleActive : ""}`}
-            onClick={() => setFocusMode(!focusMode.enabled, focusMode.allowedDomains)}
+          <Switch
+            checked={focusMode.enabled}
+            onCheckedChange={() => setFocusMode(!focusMode.enabled, focusMode.allowedDomains)}
             disabled={!canControl}
-            title={
-              !canControl
-                ? "Extension must be online to toggle focus mode"
-                : focusMode.enabled ? "Disable focus mode" : "Enable focus mode"
-            }
-          >
-            <span className={styles.focusToggleKnob} />
-          </button>
+            aria-label="Toggle focus mode"
+          />
         </div>
 
         <div className={styles.card} style={{ marginTop: 12 }}>
@@ -300,20 +288,19 @@ export default function SettingsPage() {
             setFocusDomain("");
             setAddingFocus(false);
           }}>
-            <input
-              className={styles.input}
+            <Input
+              aria-label="Add focus mode allowed domain"
               value={focusDomain}
               onChange={(e) => setFocusDomain(e.target.value)}
               placeholder="google.com"
               disabled={addingFocus || !canControl}
             />
-            <button
+            <Button
               type="submit"
-              className={`${styles.btn} ${styles.btnPrimary}`}
               disabled={addingFocus || !focusDomain.trim() || !canControl}
             >
               <Plus size={14} /> Add
-            </button>
+            </Button>
           </form>
 
           {focusMode.allowedDomains.length === 0 ? (

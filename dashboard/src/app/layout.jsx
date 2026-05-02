@@ -22,12 +22,13 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body>
+        <a href="#app-main-content" className="sr-only">Skip to main content</a>
         <PinAuthProvider>
           <PinLock>
             <MonitorProvider>
               <div className="appShell">
                 <Sidebar />
-                <main className="appMain">
+                <main id="app-main-content" className="appMain" role="main">
                   {children}
                 </main>
               </div>

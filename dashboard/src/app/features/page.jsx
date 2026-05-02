@@ -8,6 +8,7 @@ import {
   Activity, TrendingUp, Clock, Zap, Radio,
 } from "lucide-react";
 import { useMonitor } from "../../context/MonitorContext";
+import { Switch } from "../../components/ui/switch";
 import styles from "./page.module.css";
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
@@ -43,7 +44,7 @@ export default function FeaturesPage() {
   const {
     wsStatus, liveEntries, newAlertCount,
     openTabs, internetBlocked, toggleInternetBlock,
-    focusMode,
+    focusMode, selectedMonitoredUserId,
   } = useMonitor();
 
   const backendConnected = wsStatus === "connected";
@@ -97,7 +98,7 @@ export default function FeaturesPage() {
           </div>
           <div>
             <h1 className={styles.title}>Features</h1>
-            <p className={styles.subtitle}>Controls, activity &amp; monitoring overview</p>
+            <p className={styles.subtitle}>Controls, activity &amp; monitoring overview for {selectedMonitoredUserId}</p>
           </div>
         </div>
       </div>
@@ -115,14 +116,12 @@ export default function FeaturesPage() {
               {internetBlocked ? "Blocked" : "Active"}
             </div>
           </div>
-          <button
-            className={`${styles.toggleBtn} ${internetBlocked ? styles.toggleActive : ""}`}
-            onClick={toggleInternetBlock}
+          <Switch
+            checked={internetBlocked}
+            onCheckedChange={toggleInternetBlock}
             disabled={!backendConnected}
-            title={internetBlocked ? "Unblock internet" : "Block internet"}
-          >
-            <span className={styles.toggleKnob} />
-          </button>
+            aria-label={internetBlocked ? "Unblock internet" : "Block internet"}
+          />
         </div>
 
         {/* Focus Mode */}

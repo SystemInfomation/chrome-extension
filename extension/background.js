@@ -116,6 +116,7 @@ let monitorWs          = null;
 let wsReconnectTimer   = null;
 let wsHeartbeatTimer   = null;
 let wsBackoff          = 1000;
+let monitoredUserId    = "default";
 
 // ── Offline activity queue ─────────────────────────────────────────────────
 
@@ -152,6 +153,16 @@ chrome.storage.local.get(["customFilterDomains", "internetBlocked", "offlineActi
   if (Array.isArray(result.offlineActivityQueue)) {
     const restored = result.offlineActivityQueue.slice(-MAX_OFFLINE_QUEUE);
     offlineQueue.push(...restored);
+  }
+});
+
+chrome.storage.local.get(["monitoredUserId"], (result) => {
+  if (typeof result.monitoredUserId === "string" && result.monitoredUserId.trim()) {
+    monitoredUserId = result.monitoredUserId.trim().toLowerCase();
+  } else {
+    const generated = `device-${chrome.runtime.id.slice(0, 8)}`;
+    monitoredUserId = generated;
+    chrome.storage.local.set({ monitoredUserId: generated });
   }
 });
 
@@ -233,7 +244,10 @@ function connectMonitorWs() {
   clearInterval(wsHeartbeatTimer);
 
   try {
-    monitorWs = new WebSocket(MONITOR_WS_URL + "?role=extension");
+    const wsUrl = new URL(MONITOR_WS_URL);
+    wsUrl.searchParams.set("role", "extension");
+    wsUrl.searchParams.set("monitoredUserId", monitoredUserId);
+    monitorWs = new WebSocket(wsUrl.toString());
   } catch (_e) {
     scheduleWsReconnect();
     return;
@@ -385,8 +399,12 @@ function scheduleWsReconnect() {
  * @param {object} payload
  */
 function wsSend(payload) {
+  const withIdentity = {
+    ...payload,
+    monitoredUserId: payload.monitoredUserId || monitoredUserId,
+  };
   if (monitorWs && monitorWs.readyState === WebSocket.OPEN) {
-    try { monitorWs.send(JSON.stringify(payload)); } catch (_e) { /* ignore */ }
+    try { monitorWs.send(JSON.stringify(withIdentity)); } catch (_e) { /* ignore */ }
   }
 }
 
@@ -2213,10 +2231,13 @@ function fetchUserIdentity() {
     if (chrome.runtime.lastError) return;
     const email = (info && info.email) || "";
     const id    = (info && info.id)    || "";
+    const derivedMonitoredUserId = (id || email || monitoredUserId).trim().toLowerCase() || monitoredUserId;
+    monitoredUserId = derivedMonitoredUserId;
     chrome.storage.local.set({ userEmail: email, userId: id });
+    chrome.storage.local.set({ monitoredUserId: derivedMonitoredUserId });
     // Report identity to monitoring backend
     if (email) {
-      wsSend({ type: "identity", email, id, timestamp: Date.now() });
+      wsSend({ type: "identity", email, id, monitoredUserId: derivedMonitoredUserId, timestamp: Date.now() });
     }
   });
 }

@@ -3,10 +3,12 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { List, Search, Filter, Globe, ShieldOff, ChevronLeft, ChevronRight, BarChart3 } from "lucide-react";
 import { useMonitor } from "../../context/MonitorContext";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
 import styles from "./page.module.css";
 
 export default function ActivityLog() {
-  const { backendUrl, liveEntries } = useMonitor();
+  const { backendUrl, liveEntries, selectedMonitoredUserId } = useMonitor();
 
   const [items,   setItems]   = useState([]);
   const [total,   setTotal]   = useState(0);
@@ -25,6 +27,7 @@ export default function ActivityLog() {
     try {
       if (!backendUrl) throw new Error("Backend not configured");
       const params = new URLSearchParams({ page, limit: LIMIT });
+      params.set("monitoredUserId", selectedMonitoredUserId);
       if (search) params.set("search", search);
       if (action !== "all") params.set("action", action);
       const res = await fetch(`${backendUrl}/api/activity?${params}`);
@@ -37,7 +40,7 @@ export default function ActivityLog() {
     } finally {
       setLoading(false);
     }
-  }, [backendUrl, page, search, action]);
+  }, [backendUrl, page, search, action, selectedMonitoredUserId]);
 
   useEffect(() => { fetchActivity(); }, [fetchActivity]);
 
@@ -93,8 +96,9 @@ export default function ActivityLog() {
       <div className={styles.filters}>
         <div className={styles.searchWrap}>
           <Search size={14} className={styles.searchIcon} />
-          <input
+          <Input
             className={styles.searchInput}
+            aria-label="Search activity"
             placeholder="Search URL or title…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -103,13 +107,15 @@ export default function ActivityLog() {
         <div className={styles.filterGroup}>
           <Filter size={14} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
           {["all", "visit", "blocked"].map((v) => (
-            <button
+            <Button
               key={v}
               className={`${styles.filterBtn} ${action === v ? styles.filterActive : ""}`}
               onClick={() => setAction(v)}
+              variant="ghost"
+              size="sm"
             >
               {v === "all" ? "All" : v === "visit" ? "Allowed" : "Blocked"}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -209,23 +215,27 @@ export default function ActivityLog() {
       {/* Pagination */}
       {!loading && totalPages > 1 && (
         <div className={styles.pagination}>
-          <button
+          <Button
             className={styles.pageBtn}
             disabled={page <= 1}
             onClick={() => setPage((p) => p - 1)}
+            variant="secondary"
+            size="sm"
           >
             <ChevronLeft size={14} /> Prev
-          </button>
+          </Button>
           <span className={styles.pageInfo}>
             Page {page} of {totalPages}
           </span>
-          <button
+          <Button
             className={styles.pageBtn}
             disabled={page >= totalPages}
             onClick={() => setPage((p) => p + 1)}
+            variant="secondary"
+            size="sm"
           >
             Next <ChevronRight size={14} />
-          </button>
+          </Button>
         </div>
       )}
     </div>

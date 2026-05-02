@@ -2,6 +2,7 @@ import js          from "@eslint/js";
 import globals     from "globals";
 import reactPlugin from "eslint-plugin-react";
 import hooksPlugin from "eslint-plugin-react-hooks";
+import jsxA11yPlugin from "eslint-plugin-jsx-a11y";
 
 export default [
   {
@@ -13,6 +14,7 @@ export default [
     plugins: {
       react:          reactPlugin,
       "react-hooks":  hooksPlugin,
+      "jsx-a11y": jsxA11yPlugin,
     },
     languageOptions: {
       ecmaVersion: "latest",
@@ -31,6 +33,7 @@ export default [
     rules: {
       ...reactPlugin.configs.recommended.rules,
       ...hooksPlugin.configs.recommended.rules,
+      ...jsxA11yPlugin.configs.recommended.rules,
       "react/react-in-jsx-scope": "off",
       "react/prop-types":         "off",
       // Overly strict for legitimate patterns: localStorage hydration on mount

@@ -49,10 +49,8 @@ function GlitchFreeImg({ src, alt, className }) {
 
   return (
     <div className={styles.bufferWrap}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img ref={aRef} alt={alt} className={`${className} ${styles.bufferImg}`}
            style={{ opacity: 1, zIndex: 2 }} />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img ref={bRef} alt={alt} className={`${className} ${styles.bufferImg}`}
            style={{ opacity: 0, zIndex: 1 }} />
     </div>
@@ -65,7 +63,7 @@ export default function Dashboard() {
   const {
     wsStatus, extensionOnline,
     liveScreenshot, screenStreamActive, startScreenStream, stopScreenStream,
-    windowScreenshots,
+    windowScreenshots, selectedMonitoredUserId,
   } = useMonitor();
 
   const [screenExpanded, setScreenExpanded] = useState(false);
@@ -118,7 +116,7 @@ export default function Dashboard() {
         <div className={styles.cardHeader}>
           <div className={styles.cardTitle}>
             <Monitor size={15} strokeWidth={2} />
-            Live Screen
+            Live Screen ({selectedMonitoredUserId})
             {screenStreamActive && hasScreenshot && (
               <span className={styles.liveBadge}>
                 <span className={styles.liveDot} />LIVE
@@ -133,12 +131,12 @@ export default function Dashboard() {
           </div>
           <div className={styles.headerActions}>
             {screenStreamActive ? (
-              <button className={styles.streamBtn} onClick={stopScreenStream} title="Stop streaming">
+              <button className={styles.streamBtn} onClick={stopScreenStream} title="Stop streaming" aria-label="Stop screen stream">
                 <EyeOff size={14} strokeWidth={2} />
                 <span>Stop</span>
               </button>
             ) : backendConnected && extensionOnline ? (
-              <button className={styles.streamBtn} onClick={startScreenStream} title="Start streaming">
+              <button className={styles.streamBtn} onClick={startScreenStream} title="Start streaming" aria-label="Start screen stream">
                 <Eye size={14} strokeWidth={2} />
                 <span>Start Stream</span>
               </button>
