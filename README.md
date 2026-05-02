@@ -3,7 +3,7 @@
 [![Build & Package Extension](https://github.com/SystemInfomation/cdn-hosting/actions/workflows/build-extension.yml/badge.svg)](https://github.com/SystemInfomation/cdn-hosting/actions/workflows/build-extension.yml)
 [![Download Extension ZIP](https://img.shields.io/badge/Download-Extension%20ZIP-blue?style=flat&logo=googlechrome)](https://github.com/SystemInfomation/cdn-hosting/releases/latest/download/watson-control-tower.zip)
 
-Chrome extension + hosted blocked page that protects users from insecure connections, adult content, gaming websites, personal/social media, and malicious/suspicious websites. Works as a normal Chrome extension without requiring enterprise enrollment or special policies.
+Chrome extension + hosted blocked page that protects users from insecure connections, adult content, gaming websites, personal/social media, and malicious/suspicious websites. Works as a normal Chrome extension without requiring enterprise enrollment or special policies. 
 
 ---
 
